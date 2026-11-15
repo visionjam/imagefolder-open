@@ -27,4 +27,10 @@ object ShareClassifier {
             extractUris = unique.filter { it.hasHiddenPayload }.map { it.uri },
         )
     }
+
+    /** Merges a second share into a pending one, keeping each URI only once. */
+    fun merge(existing: SharePlan?, incoming: SharePlan): SharePlan = SharePlan(
+        packUris = ((existing?.packUris ?: emptyList()) + incoming.packUris).distinct(),
+        extractUris = ((existing?.extractUris ?: emptyList()) + incoming.extractUris).distinct(),
+    )
 }

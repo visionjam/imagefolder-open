@@ -1,6 +1,7 @@
 package com.imagefolder.open.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -57,6 +58,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     pendingShare?.let { pending ->
         ShareChoiceDialog(
             count = pending.extractSources.size,
+            skippedCount = pending.skippedCount,
             onExtract = viewModel::confirmShareExtract,
             onPack = viewModel::confirmSharePack,
             onDismiss = viewModel::dismissPendingShare,
@@ -120,6 +122,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
 @Composable
 private fun ShareChoiceDialog(
     count: Int,
+    skippedCount: Int,
     onExtract: () -> Unit,
     onPack: () -> Unit,
     onDismiss: () -> Unit,
@@ -127,7 +130,14 @@ private fun ShareChoiceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.share_choice_title)) },
-        text = { Text(stringResource(R.string.share_choice_message, count)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.share_choice_message, count))
+                if (skippedCount > 0) {
+                    Text(stringResource(R.string.share_choice_skipped, skippedCount))
+                }
+            }
+        },
         confirmButton = {
             TextButton(onClick = onExtract) {
                 Text(stringResource(R.string.share_extract_action))

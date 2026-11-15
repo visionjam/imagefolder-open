@@ -53,4 +53,27 @@ class ShareClassifierTest {
         assertTrue(ShareClassifier.shouldInspect(64L * 1024 * 1024))
         assertFalse(ShareClassifier.shouldInspect(64L * 1024 * 1024 + 1))
     }
+
+    @Test
+    fun `merge unions existing and incoming plans and deduplicates`() {
+        val existing = SharePlan(
+            packUris = listOf("content://a"),
+            extractUris = listOf("content://img1"),
+        )
+        val incoming = SharePlan(
+            packUris = listOf("content://a", "content://b"),
+            extractUris = listOf("content://img2"),
+        )
+        val merged = ShareClassifier.merge(existing, incoming)
+        assertEquals(listOf("content://a", "content://b"), merged.packUris)
+        assertEquals(listOf("content://img1", "content://img2"), merged.extractUris)
+    }
+
+    @Test
+    fun `merge handles a first share with no existing plan`() {
+        val incoming = SharePlan(packUris = listOf("content://a"), extractUris = emptyList())
+        val merged = ShareClassifier.merge(null, incoming)
+        assertEquals(listOf("content://a"), merged.packUris)
+        assertTrue(merged.extractUris.isEmpty())
+    }
 }

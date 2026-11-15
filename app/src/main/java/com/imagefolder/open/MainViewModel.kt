@@ -31,6 +31,7 @@ import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
 import com.imagefolder.open.data.ShareClassifier
+import com.imagefolder.open.data.SharePlan
 import com.imagefolder.open.data.SharedFile
 import com.imagefolder.open.data.UriUtils
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,7 @@ data class ExtractUiState(
 data class PendingShare(
     val extractSources: List<PickedFile>,
     val packSources: List<PickedFile>,
+    val skippedCount: Int = 0,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -172,17 +174,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun handleSharedUris(uris: List<Uri>) {
-        if (uris.isEmpty()) {
+        val distinctUris = uris.distinct()
+        if (distinctUris.isEmpty()) {
             showMessage(getApplication<Application>().getString(R.string.msg_share_no_files))
             return
         }
         viewModelScope.launch {
             val app = getApplication<Application>()
             val resolved = withContext(Dispatchers.IO) {
-                uris.distinct().mapNotNull { uri ->
+                distinctUris.mapNotNull { uri ->
                     runCatching { UriUtils.describe(app, uri) }.getOrNull()
                 }
             }
+            val skipped = distinctUris.size - resolved.size
             if (resolved.isEmpty()) {
                 showMessage(app.getString(R.string.msg_share_no_files))
                 return@launch
@@ -214,17 +218,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val incomingPack = plan.packUris.mapNotNull(byUri::get)
             val current = _pendingShare.value
             if (plan.needsChoice || current != null) {
-                // 对话框已存在时按 URI 去重合并，避免重复添加。
+                val merged = ShareClassifier.merge(
+                    existing = current?.let {
+                        SharePlan(
+                            packUris = it.packSources.map { file -> file.uri.toString() },
+                            extractUris = it.extractSources.map { file -> file.uri.toString() },
+                        )
+                    },
+                    incoming = plan,
+                )
+                val allByUri = (
+                    current?.packSources.orEmpty() +
+                        current?.extractSources.orEmpty() +
+                        incomingPack +
+                        incomingExtract
+                    ).associateBy { it.uri.toString() }
                 _pendingShare.value = PendingShare(
-                    extractSources = (current?.extractSources.orEmpty() + incomingExtract)
-                        .distinctBy { it.uri },
-                    packSources = (current?.packSources.orEmpty() + incomingPack)
-                        .distinctBy { it.uri },
+                    extractSources = merged.extractUris.mapNotNull(allByUri::get),
+                    packSources = merged.packUris.mapNotNull(allByUri::get),
+                    skippedCount = (current?.skippedCount ?: 0) + skipped,
                 )
             } else {
-                addPayloadsDirect(incomingPack)
+                dismissGeneratedResult()
+                val added = addPayloadsDirect(incomingPack)
                 selectTab(0)
-                showMessage(app.getString(R.string.msg_share_added, incomingPack.size))
+                showMessage(
+                    when {
+                        added == 0 -> app.getString(R.string.msg_share_none_added)
+                        skipped > 0 -> app.getString(R.string.msg_share_added_skipped, added, skipped)
+                        else -> app.getString(R.string.msg_share_added, added)
+                    },
+                )
             }
         }
     }
@@ -232,6 +256,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmShareExtract() {
         val pending = _pendingShare.value ?: return
         _pendingShare.value = null
+        dismissGeneratedResult()
         _extract.update {
             it.copy(
                 sources = pending.extractSources,
@@ -239,6 +264,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 hasExtracted = false,
                 needsPassword = false,
                 passwordError = false,
+                extracting = false,
+                unpackingIndex = null,
+                unpackPasswordIndex = null,
+                unpackPasswordError = false,
             )
         }
         selectTab(1)
@@ -247,19 +276,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmSharePack() {
         val pending = _pendingShare.value ?: return
         _pendingShare.value = null
-        addPayloadsDirect(pending.packSources)
+        dismissGeneratedResult()
+        val added = addPayloadsDirect(pending.packSources)
         selectTab(0)
+        if (added > 0) {
+            showMessage(getApplication<Application>().getString(R.string.msg_share_added, added))
+        }
     }
 
     fun dismissPendingShare() {
         _pendingShare.value = null
     }
 
-    private fun addPayloadsDirect(files: List<PickedFile>) {
+    /** Leaves the generated-result screen so a confirmed share can show its target tab. */
+    private fun dismissGeneratedResult() {
+        if (_pack.value.result != null) {
+            _pack.update { it.copy(result = null) }
+        }
+    }
+
+    private fun addPayloadsDirect(files: List<PickedFile>): Int {
+        var added = 0
         _pack.update { state ->
             val existing = state.payloads.map { it.uri }.toSet()
-            state.copy(payloads = state.payloads + files.filterNot { it.uri in existing })
+            val newFiles = files.filterNot { it.uri in existing }
+            added = newFiles.size
+            state.copy(payloads = state.payloads + newFiles)
         }
+        return added
     }
 
     fun setCompatMode(enabled: Boolean) {

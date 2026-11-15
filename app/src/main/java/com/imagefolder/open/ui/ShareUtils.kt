@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.imagefolder.open.GeneratedResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal fun writeShareCache(context: Context, bytes: ByteArray, fileName: String): Uri {
     val directory = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
@@ -13,8 +15,10 @@ internal fun writeShareCache(context: Context, bytes: ByteArray, fileName: Strin
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
-internal fun shareGeneratedImage(context: Context, result: GeneratedResult) {
-    val uri = writeShareCache(context, result.bytes, result.fileName)
+internal suspend fun shareGeneratedImage(context: Context, result: GeneratedResult) {
+    val uri = withContext(Dispatchers.IO) {
+        writeShareCache(context, result.bytes, result.fileName)
+    }
     val send = Intent(Intent.ACTION_SEND).apply {
         type = result.mime
         putExtra(Intent.EXTRA_STREAM, uri)
