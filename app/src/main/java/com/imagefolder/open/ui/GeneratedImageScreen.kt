@@ -86,7 +86,10 @@ fun GeneratedImageScreen(
 
     if (showShareWarning) {
         AlertDialog(
-            onDismissRequest = { showShareWarning = false },
+            onDismissRequest = {
+                dontAskAgain = false
+                showShareWarning = false
+            },
             title = { Text(stringResource(R.string.share_warning_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -110,7 +113,10 @@ fun GeneratedImageScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showShareWarning = false }) {
+                TextButton(onClick = {
+                    dontAskAgain = false
+                    showShareWarning = false
+                }) {
                     Text(stringResource(R.string.cancel))
                 }
             },
@@ -200,7 +206,12 @@ fun GeneratedImageScreen(
 
             OutlinedButton(
                 onClick = {
-                    if (shareWarningSeen) share() else showShareWarning = true
+                    if (shareWarningSeen) {
+                        share()
+                    } else {
+                        dontAskAgain = false
+                        showShareWarning = true
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {

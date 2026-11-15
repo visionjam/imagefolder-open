@@ -264,19 +264,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val pending = _pendingShare.value ?: return
         _pendingShare.value = null
         dismissGeneratedResult()
-        _extract.update {
-            it.copy(
-                sources = pending.extractSources,
-                results = emptyList(),
-                hasExtracted = false,
-                needsPassword = false,
-                passwordError = false,
-                extracting = false,
-                unpackingIndex = null,
-                unpackPasswordIndex = null,
-                unpackPasswordError = false,
-            )
-        }
+        resetExtractForNewSources(pending.extractSources)
         selectTab(1)
     }
 
@@ -599,18 +587,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val files = withContext(Dispatchers.IO) {
                 uris.mapNotNull { runCatching { UriUtils.describe(app, it) }.getOrNull() }
             }
-            _extract.update {
-                it.copy(
-                    sources = files,
-                    results = emptyList(),
-                    hasExtracted = false,
-                    needsPassword = false,
-                    passwordError = false,
-                    unpackingIndex = null,
-                    unpackPasswordIndex = null,
-                    unpackPasswordError = false,
-                )
-            }
+            resetExtractForNewSources(files)
+        }
+    }
+
+    private fun resetExtractForNewSources(sources: List<PickedFile>) {
+        _extract.update {
+            it.copy(
+                sources = sources,
+                results = emptyList(),
+                hasExtracted = false,
+                needsPassword = false,
+                passwordError = false,
+                extracting = false,
+                exporting = false,
+                unpackingIndex = null,
+                unpackPasswordIndex = null,
+                unpackPasswordError = false,
+            )
         }
     }
 

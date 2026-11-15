@@ -35,6 +35,8 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Split ZIP (`.z01`… + `.zip` or `.zip.001`…) and split 7z (`.7z.001`…)
   - Preserves directory structure; nested archives can be unpacked recursively; missing split parts are listed
   - RAR is not supported
+- **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
+- **Share out**: share a generated image directly; a first-time note explains that chat apps may recompress it and strip the hidden data
 - **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
 - **Compatibility mode**: pick a single image from the gallery for devices with picker issues
 - **Material 3**: dynamic color, dark mode, edge-to-edge
