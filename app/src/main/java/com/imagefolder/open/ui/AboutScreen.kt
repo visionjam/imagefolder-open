@@ -158,6 +158,9 @@ fun AboutScreen(
             }
         }
 
+        SectionTitle(R.string.about_section_privacy)
+        PrivacyCard()
+
         SectionTitle(R.string.about_section_tools)
         Card(modifier = Modifier.fillMaxWidth()) {
             Column {
@@ -329,6 +332,34 @@ private fun SectionTitle(@StringRes titleRes: Int) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 4.dp, top = 8.dp),
     )
+}
+
+@Composable
+private fun PrivacyCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.about_privacy_local),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = stringResource(R.string.about_privacy_network),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = stringResource(R.string.about_privacy_open),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
 }
 
 @Composable

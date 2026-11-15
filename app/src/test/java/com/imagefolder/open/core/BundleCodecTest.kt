@@ -10,6 +10,11 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 
 class BundleCodecTest {
 
@@ -102,6 +107,72 @@ class BundleCodecTest {
         assertThrows(BundleFormatException::class.java) {
             BundleCodec.unpack(ByteArray(24), password = null)
         }
+    }
+
+    @Test
+    fun `new encrypted envelope uses 600000 iterations`() {
+        val packed = BundleCodec.pack(entries, compress = true, password = "pw")
+        val iterations = ((packed[6].toInt() and 0xFF) shl 24) or
+            ((packed[7].toInt() and 0xFF) shl 16) or
+            ((packed[8].toInt() and 0xFF) shl 8) or
+            (packed[9].toInt() and 0xFF)
+        assertEquals(600_000, iterations)
+    }
+
+    @Test
+    fun `legacy 150000 iteration envelope still decrypts`() {
+        val zip = zipOf("old.txt", "legacy payload".toByteArray(StandardCharsets.UTF_8))
+        val envelope = legacyEncryptedEnvelope(zip, "pw", 150_000)
+        val unpacked = BundleCodec.unpack(envelope, "pw")
+        assertEquals(listOf("old.txt"), unpacked.map { it.path })
+        assertArrayEquals("legacy payload".toByteArray(StandardCharsets.UTF_8), unpacked.single().bytes)
+    }
+
+    private fun zipOf(path: String, bytes: ByteArray): ByteArray =
+        ByteArrayOutputStream().also { out ->
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry(path))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+    /** Builds an IFB2 envelope using an arbitrary iteration count. */
+    private fun legacyEncryptedEnvelope(
+        zipBytes: ByteArray,
+        password: String,
+        iterations: Int,
+    ): ByteArray {
+        val salt = ByteArray(16) { (it + 1).toByte() }
+        val nonce = ByteArray(12) { (it + 21).toByte() }
+        val header = ByteArrayOutputStream().also { out ->
+            out.write("IFB2".toByteArray(StandardCharsets.US_ASCII))
+            out.write(1)
+            out.write(1)
+            out.write(
+                byteArrayOf(
+                    (iterations ushr 24).toByte(),
+                    (iterations ushr 16).toByte(),
+                    (iterations ushr 8).toByte(),
+                    iterations.toByte(),
+                ),
+            )
+            out.write(16)
+            out.write(12)
+            out.write(salt)
+            out.write(nonce)
+        }.toByteArray()
+        val key = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(PBEKeySpec(password.toCharArray(), salt, iterations, 256))
+            .encoded
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            SecretKeySpec(key, "AES"),
+            GCMParameterSpec(128, nonce),
+        )
+        cipher.updateAAD(header)
+        return header + cipher.doFinal(zipBytes)
     }
 
     /** Builds an unencrypted envelope so tests can inject a hand-crafted ZIP. */

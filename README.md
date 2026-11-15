@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.5.1** · [Changelog](CHANGELOG.md)
+> Current version: **v0.6.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
@@ -23,7 +23,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Output names follow the original style: `Tank_20261115_123456.png` / `.jpg` / `.webp`
 - **Folders**: add whole directories through the system picker; directory structure and empty folders are preserved
 - **Compression**: ZIP Deflate to reduce payload size
-- **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (150,000 iterations); a password is required for extraction
+- **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (600,000 iterations); a password is required for extraction. Older bundles are read with the iteration count stored in their header.
 - **Extract**: select multiple PNG / JPEG / WebP images and automatically detect hidden content
   - Preview images directly
   - Save one item or all items to the gallery
@@ -35,6 +35,8 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Split ZIP (`.z01`… + `.zip` or `.zip.001`…) and split 7z (`.7z.001`…)
   - Preserves directory structure; nested archives can be unpacked recursively; missing split parts are listed
   - RAR is not supported
+- **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
+- **Share out**: share a generated image directly; a first-time note explains that chat apps may recompress it and strip the hidden data
 - **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
 - **Compatibility mode**: pick a single image from the gallery for devices with picker issues
 - **Material 3**: dynamic color, dark mode, edge-to-edge
@@ -49,6 +51,15 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 | WebP (any mode) | ✅ | ❌ not recognized |
 
 PNG output without advanced features still writes the original per-file `tpWj` chunks, so basic usage is fully interoperable; advanced features use the v0.2 `IFB2` envelope. JPEG/WebP carriers use private segments/chunks in their containers and can only be read by this app.
+
+## Privacy
+
+- **No network permission.** The app does not request `INTERNET`; there are no analytics, accounts, or cloud services.
+- **All local.** Packing, extraction and decryption run entirely on the device. Nothing is uploaded.
+- **What encryption protects.** An encrypted bundle hides the payload contents and inner file names. It does **not** hide the fact that the image contains hidden data, the entry count, or the carrier image itself.
+- **Transit risk.** Chat and social apps may recompress images or strip unknown chunks/segments. Send the image as a file when possible; the recipient needs this app to extract it.
+- **Password loss is unrecoverable.** Passwords are never stored.
+- See [SECURITY.md](SECURITY.md) for the threat model and [docs/FORMAT.md](docs/FORMAT.md) for the on-disk format.
 
 ## Data format
 

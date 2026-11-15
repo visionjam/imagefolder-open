@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.imagefolder.open.core.ArchiveEntry
@@ -30,6 +31,9 @@ import com.imagefolder.open.data.FolderReader
 import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
+import com.imagefolder.open.data.ShareClassifier
+import com.imagefolder.open.data.SharePlan
+import com.imagefolder.open.data.SharedFile
 import com.imagefolder.open.data.UriUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +42,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -102,6 +107,12 @@ data class ExtractUiState(
     val unpackPasswordError: Boolean = false,
 )
 
+data class PendingShare(
+    val extractSources: List<PickedFile>,
+    val packSources: List<PickedFile>,
+    val skippedCount: Int = 0,
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -138,6 +149,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private val _shareWarningSeen = MutableStateFlow(prefs.getBoolean(KEY_SHARE_WARNING_SEEN, false))
+    val shareWarningSeen: StateFlow<Boolean> = _shareWarningSeen.asStateFlow()
+
     fun showMessage(text: String) {
         _message.value = text
     }
@@ -145,6 +159,181 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearMessage() {
         _message.value = null
     }
+
+    fun markShareWarningSeen() {
+        _shareWarningSeen.value = true
+        prefs.edit().putBoolean(KEY_SHARE_WARNING_SEEN, true).apply()
+    }
+
+    private val _activeTab = MutableStateFlow(0)
+    val activeTab: StateFlow<Int> = _activeTab.asStateFlow()
+
+    private val _pendingShare = MutableStateFlow<PendingShare?>(null)
+    val pendingShare: StateFlow<PendingShare?> = _pendingShare.asStateFlow()
+
+    fun selectTab(index: Int) {
+        if (index in 0..2) _activeTab.value = index
+    }
+
+    fun handleSharedUris(uris: List<Uri>) {
+        val distinctUris = uris.distinct()
+        if (distinctUris.isEmpty()) {
+            showMessage(getApplication<Application>().getString(R.string.msg_share_no_files))
+            return
+        }
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val resolved = withContext(Dispatchers.IO) {
+                distinctUris.mapNotNull { uri ->
+                    runCatching { UriUtils.describe(app, uri) }.getOrNull()
+                }
+            }
+            // Shared URIs only carry a transient read grant; copy them now so
+            // generation and extraction do not depend on the grant later.
+            val imported = withContext(Dispatchers.IO) {
+                resolved.mapIndexedNotNull { index, file -> importSharedFile(app, file, index) }
+            }
+            val skipped = distinctUris.size - imported.size
+            if (imported.isEmpty()) {
+                showMessage(app.getString(R.string.msg_share_no_files))
+                return@launch
+            }
+            val shared = withContext(Dispatchers.IO) {
+                imported.map { file ->
+                    val inspect = file.mime?.startsWith("image/") == true &&
+                        ShareClassifier.shouldInspect(file.size)
+                    val hasHidden = inspect && runCatching {
+                        val bytes = UriUtils.readAtMost(
+                            app,
+                            file.uri,
+                            ShareClassifier.MAX_INSPECT_BYTES,
+                        )
+                        bytes != null && CarrierCodec.extractItems(bytes).isNotEmpty()
+                    }.getOrDefault(false)
+                    SharedFile(
+                        uri = file.uri.toString(),
+                        name = file.name,
+                        mime = file.mime,
+                        size = file.size,
+                        hasHiddenPayload = hasHidden,
+                    )
+                }
+            }
+            val plan = ShareClassifier.classify(shared)
+            val byUri = imported.associateBy { it.uri.toString() }
+            val incomingExtract = plan.extractUris.mapNotNull(byUri::get)
+            val incomingPack = plan.packUris.mapNotNull(byUri::get)
+            val current = _pendingShare.value
+            if (plan.needsChoice || current != null) {
+                val merged = ShareClassifier.merge(
+                    existing = current?.let {
+                        SharePlan(
+                            packUris = it.packSources.map { file -> file.uri.toString() },
+                            extractUris = it.extractSources.map { file -> file.uri.toString() },
+                        )
+                    },
+                    incoming = plan,
+                )
+                val allByUri = (
+                    current?.packSources.orEmpty() +
+                        current?.extractSources.orEmpty() +
+                        incomingPack +
+                        incomingExtract
+                    ).associateBy { it.uri.toString() }
+                _pendingShare.value = PendingShare(
+                    extractSources = merged.extractUris.mapNotNull(allByUri::get),
+                    packSources = merged.packUris.mapNotNull(allByUri::get),
+                    skippedCount = (current?.skippedCount ?: 0) + skipped,
+                )
+            } else {
+                dismissGeneratedResult()
+                val added = addPayloadsDirect(incomingPack)
+                selectTab(0)
+                showMessage(
+                    when {
+                        added == 0 -> app.getString(R.string.msg_share_none_added)
+                        skipped > 0 -> app.getString(R.string.msg_share_added_skipped, added, skipped)
+                        else -> app.getString(R.string.msg_share_added, added)
+                    },
+                )
+            }
+        }
+    }
+
+    fun confirmShareExtract() {
+        val pending = _pendingShare.value ?: return
+        _pendingShare.value = null
+        dismissGeneratedResult()
+        resetExtractForNewSources(pending.extractSources)
+        selectTab(1)
+    }
+
+    fun confirmSharePack() {
+        val pending = _pendingShare.value ?: return
+        _pendingShare.value = null
+        dismissGeneratedResult()
+        val added = addPayloadsDirect(pending.packSources)
+        selectTab(0)
+        if (added > 0) {
+            showMessage(getApplication<Application>().getString(R.string.msg_share_added, added))
+        }
+    }
+
+    fun dismissPendingShare() {
+        _pendingShare.value = null
+    }
+
+    /** Leaves the generated-result screen so a confirmed share can show its target tab. */
+    private fun dismissGeneratedResult() {
+        if (_pack.value.result != null) {
+            _pack.update { it.copy(result = null) }
+        }
+    }
+
+    private fun addPayloadsDirect(files: List<PickedFile>): Int {
+        var added = 0
+        _pack.update { state ->
+            val existing = state.payloads.map { it.uri }.toSet()
+            val newFiles = files.filterNot { it.uri in existing }
+            added = newFiles.size
+            state.copy(payloads = state.payloads + newFiles)
+        }
+        return added
+    }
+
+    /**
+     * Copies a shared URI into the app cache before its transient read grant
+     * expires. A stable cache name keeps repeated shares of the same URI deduplicated.
+     */
+    private fun importSharedFile(app: Application, file: PickedFile, index: Int): PickedFile? =
+        runCatching {
+            val root = File(app.cacheDir, "shared-in").apply { mkdirs() }
+            val now = System.currentTimeMillis()
+            root.listFiles()?.forEach { old ->
+                if (now - old.lastModified() > 24L * 60 * 60 * 1000) old.delete()
+            }
+            val fallback = file.uri.lastPathSegment?.substringAfterLast('/')
+            val extension = MimeTypeMap.getSingleton()
+                .getExtensionFromMimeType(file.mime ?: "") ?: "bin"
+            val displayName = if (file.name == fallback) {
+                "shared_${index + 1}.$extension"
+            } else {
+                file.name
+            }
+            val safeName = displayName.replace('/', '_')
+            val key = Integer.toHexString(file.uri.toString().hashCode())
+            val target = File(root, "${key}_$safeName")
+            val input = app.contentResolver.openInputStream(file.uri) ?: return@runCatching null
+            input.use { source ->
+                target.outputStream().use { sink -> source.copyTo(sink) }
+            }
+            PickedFile(
+                uri = Uri.fromFile(target),
+                name = displayName,
+                size = target.length(),
+                mime = file.mime,
+            )
+        }.getOrNull()
 
     fun setCompatMode(enabled: Boolean) {
         _compatMode.value = enabled
@@ -398,18 +587,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val files = withContext(Dispatchers.IO) {
                 uris.mapNotNull { runCatching { UriUtils.describe(app, it) }.getOrNull() }
             }
-            _extract.update {
-                it.copy(
-                    sources = files,
-                    results = emptyList(),
-                    hasExtracted = false,
-                    needsPassword = false,
-                    passwordError = false,
-                    unpackingIndex = null,
-                    unpackPasswordIndex = null,
-                    unpackPasswordError = false,
-                )
-            }
+            resetExtractForNewSources(files)
+        }
+    }
+
+    private fun resetExtractForNewSources(sources: List<PickedFile>) {
+        _extract.update {
+            it.copy(
+                sources = sources,
+                results = emptyList(),
+                hasExtracted = false,
+                needsPassword = false,
+                passwordError = false,
+                extracting = false,
+                exporting = false,
+                unpackingIndex = null,
+                unpackPasswordIndex = null,
+                unpackPasswordError = false,
+            )
         }
     }
 
@@ -815,5 +1010,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val KEY_COMPAT_MODE = "compat_mode"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LANGUAGE_MODE = "language_mode"
+        const val KEY_SHARE_WARNING_SEEN = "share_warning_seen"
     }
 }

@@ -18,6 +18,7 @@ import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
 import com.imagefolder.open.data.GallerySaver
+import com.imagefolder.open.ui.writeShareCache
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.model.ZipParameters
 import net.lingala.zip4j.model.enums.CompressionMethod
@@ -223,5 +224,37 @@ class OnDevicePipelineTest {
         } finally {
             context.contentResolver.delete(saved.uri, null, null)
         }
+    }
+
+    @Test
+    fun shareCacheWritesTheGeneratedBytes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bytes = "share me".toByteArray(StandardCharsets.UTF_8)
+        val uri = writeShareCache(context, bytes, "share-test.png")
+        val file = java.io.File(requireNotNull(context.cacheDir), "shared/share-test.png")
+        assertTrue(file.exists())
+        assertEquals(
+            uri,
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            ),
+        )
+        assertArrayEquals(bytes, file.readBytes())
+    }
+
+    @Test
+    fun readAtMostRejectsOversizedStreams() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = java.io.File(context.cacheDir, "read-at-most.bin").apply {
+            writeBytes(ByteArray(2 * 1024 * 1024))
+        }
+        val uri = android.net.Uri.fromFile(file)
+        val limited = com.imagefolder.open.data.UriUtils.readAtMost(context, uri, 1024 * 1024)
+        assertTrue(limited == null)
+        val full = com.imagefolder.open.data.UriUtils.readAtMost(context, uri, 3 * 1024 * 1024)
+        assertEquals(2 * 1024 * 1024, requireNotNull(full).size)
+        file.delete()
     }
 }
