@@ -18,9 +18,38 @@ import java.nio.charset.StandardCharsets
  * PNG chunks, JPEG APP15 segments and the WebP carrier chunk all store the
  * same header so extraction and metadata stay consistent across containers.
  */
+internal data class HiddenHeader(
+    val name: String,
+    val mime: String?,
+    val format: String?,
+    val encrypted: Boolean?,
+    val compressed: Boolean?,
+    val entryCount: Int?,
+)
+
 internal object HiddenPayloadCodec {
     const val TERMINATOR: Byte = 0
     private val json = Json { ignoreUnknownKeys = true }
+
+    fun parseHeader(payload: ByteArray): HiddenHeader? {
+        val separator = payload.indexOfFirst { it == TERMINATOR }
+        if (separator <= 0) return null
+        val header = runCatching {
+            json.parseToJsonElement(
+                String(payload, 0, separator, StandardCharsets.UTF_8),
+            ).jsonObject
+        }.getOrNull() ?: return null
+        val name = header["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }
+            ?: return null
+        return HiddenHeader(
+            name = name,
+            mime = header["mime"]?.jsonPrimitive?.contentOrNull,
+            format = header["format"]?.jsonPrimitive?.contentOrNull,
+            encrypted = header["enc"]?.jsonPrimitive?.booleanOrNull,
+            compressed = header["comp"]?.jsonPrimitive?.booleanOrNull,
+            entryCount = header["entries"]?.jsonPrimitive?.intOrNull,
+        )
+    }
 
     fun encodeHeader(item: HiddenItem): ByteArray {
         val header = buildJsonObject {

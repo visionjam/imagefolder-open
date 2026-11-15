@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.webkit.MimeTypeMap
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.imagefolder.open.core.ArchiveEntry
@@ -28,14 +29,18 @@ import com.imagefolder.open.core.InvalidPasswordException
 import com.imagefolder.open.core.PngChunkCodec
 import com.imagefolder.open.data.FolderExporter
 import com.imagefolder.open.data.FolderReader
+import com.imagefolder.open.data.FolderScanner
 import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
+import com.imagefolder.open.data.ScanHit
 import com.imagefolder.open.data.ShareClassifier
 import com.imagefolder.open.data.SharePlan
 import com.imagefolder.open.data.SharedFile
 import com.imagefolder.open.data.UriUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,6 +110,11 @@ data class ExtractUiState(
     val unpackingIndex: Int? = null,
     val unpackPasswordIndex: Int? = null,
     val unpackPasswordError: Boolean = false,
+    val scanning: Boolean = false,
+    val scanScanned: Int = 0,
+    val scanTotal: Int = 0,
+    val scanHits: List<ScanHit> = emptyList(),
+    val scanFolderName: String? = null,
 )
 
 data class PendingShare(
@@ -123,6 +133,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _extract = MutableStateFlow(ExtractUiState())
     val extract: StateFlow<ExtractUiState> = _extract.asStateFlow()
+
+    private var scanJob: Job? = null
 
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
@@ -580,6 +592,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pack.update { it.copy(result = null) }
     }
 
+    fun scanFolder(uri: Uri) {
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
+            val app = getApplication<Application>()
+            runCatching {
+                app.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            val folderName = runCatching {
+                DocumentFile.fromTreeUri(app, uri)?.name
+            }.getOrNull() ?: uri.lastPathSegment ?: "folder"
+            _extract.update {
+                it.copy(
+                    scanning = true,
+                    scanScanned = 0,
+                    scanTotal = 0,
+                    scanHits = emptyList(),
+                    scanFolderName = folderName,
+                )
+            }
+            val hits = withContext(Dispatchers.IO) {
+                FolderScanner.scan(
+                    context = app,
+                    treeUri = uri,
+                    onProgress = { scanned, total ->
+                        _extract.update { state ->
+                            state.copy(scanScanned = scanned, scanTotal = total)
+                        }
+                    },
+                    shouldContinue = { isActive },
+                )
+            }
+            _extract.update {
+                it.copy(
+                    scanning = false,
+                    scanHits = hits,
+                    scanScanned = hits.size,
+                    scanTotal = maxOf(it.scanTotal, hits.size),
+                )
+            }
+        }
+    }
+
+    fun cancelScan() {
+        scanJob?.cancel()
+        scanJob = null
+        _extract.update { it.copy(scanning = false) }
+    }
+
+    fun addScanHitsToExtract() {
+        val hits = _extract.value.scanHits
+        if (hits.isEmpty()) return
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val files = withContext(Dispatchers.IO) {
+                hits.mapNotNull { hit ->
+                    runCatching { UriUtils.describe(app, hit.uri) }.getOrNull()
+                }
+            }
+            resetExtractForNewSources(files)
+            _extract.update { it.copy(scanHits = emptyList()) }
+            showMessage(app.getString(R.string.msg_scan_added, files.size))
+        }
+    }
+
     fun setExtractSources(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
@@ -917,12 +996,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val entries = mutableListOf<BundleEntry>()
         val usedPaths = mutableSetOf<String>()
         var failed = 0
+        var totalBytes = 0L
+
+        fun addEntries(newEntries: List<BundleEntry>) {
+            for (entry in newEntries) {
+                totalBytes += entry.bytes.size
+                if (totalBytes > MAX_PACK_BYTES) {
+                    throw IllegalStateException(
+                        app.getString(R.string.msg_payload_too_large),
+                    )
+                }
+                entries += entry
+            }
+        }
+
         for (folder in folders) {
             val scan = FolderReader.collect(app, folder, usedPaths)
-            entries += scan.entries
+            addEntries(scan.entries)
             failed += scan.failedFiles
         }
         for (file in payloads) {
+            if (file.size > 0 && totalBytes + file.size > MAX_PACK_BYTES) {
+                throw IllegalStateException(app.getString(R.string.msg_payload_too_large))
+            }
             val bytes = runCatching { UriUtils.readBytes(app, file.uri) }.getOrNull()
             if (bytes == null) {
                 failed++
@@ -930,7 +1026,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val name = BundlePaths.sanitizeSegment(file.name)
             val path = BundlePaths.uniqueFilePath(name, usedPaths)
-            entries += BundleEntry(path, bytes)
+            addEntries(listOf(BundleEntry(path, bytes)))
         }
         return entries to failed
     }
@@ -1011,5 +1107,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LANGUAGE_MODE = "language_mode"
         const val KEY_SHARE_WARNING_SEEN = "share_warning_seen"
+        const val MAX_PACK_BYTES = 256L * 1024 * 1024
     }
 }

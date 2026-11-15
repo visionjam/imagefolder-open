@@ -315,6 +315,15 @@ fun PackScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        val knownBytes = state.payloads.sumOf { maxOf(0L, it.size) }
+        if (knownBytes > 0) {
+            Text(
+                text = stringResource(R.string.pack_size_hint, formatSize(knownBytes)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Button(
             onClick = viewModel::generate,
             enabled = hasContent && passwordReady && !state.generating,

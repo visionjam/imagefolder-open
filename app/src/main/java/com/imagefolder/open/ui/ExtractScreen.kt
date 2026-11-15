@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Unarchive
@@ -38,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -84,6 +86,9 @@ fun ExtractScreen(
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) viewModel.exportToFolder(uri)
     }
+    val scanPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.scanFolder(uri)
+    }
 
     Column(
         modifier = Modifier
@@ -126,6 +131,104 @@ fun ExtractScreen(
             Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.pick_extract))
+        }
+
+        OutlinedButton(
+            onClick = { scanPicker.launch(null) },
+            enabled = !state.scanning,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.scan_folder))
+        }
+
+        if (state.scanning) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(
+                        R.string.scanning_progress,
+                        state.scanScanned,
+                        state.scanTotal,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (state.scanTotal > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.scanScanned.toFloat() / state.scanTotal },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(onClick = viewModel::cancelScan) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        } else if (state.scanHits.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.scan_results, state.scanHits.size),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OutlinedButton(
+                onClick = viewModel::addScanHitsToExtract,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.scan_add_all))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.scanHits.forEach { hit ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PhotoLibrary,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = hit.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = buildString {
+                                        append(hit.format.name)
+                                        append(" · ")
+                                        append(
+                                            stringResource(
+                                                R.string.scan_entries,
+                                                hit.entries,
+                                            ),
+                                        )
+                                        if (hit.encrypted) {
+                                            append(" · ")
+                                            append(stringResource(R.string.scan_encrypted))
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (state.scanFolderName != null && state.scanTotal > 0) {
+            Text(
+                text = stringResource(R.string.scan_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Button(
