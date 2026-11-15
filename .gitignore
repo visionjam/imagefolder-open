@@ -7,3 +7,6 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Local-only workspace (tools, analysis, releases, scripts)
+/workspace/

@@ -9,15 +9,20 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.imagefolder.open.core.ArchiveExtractor
 import com.imagefolder.open.core.ArchiveFormat
+import com.imagefolder.open.core.ArchivePart
 import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
 import com.imagefolder.open.data.GallerySaver
+import net.lingala.zip4j.ZipFile
+import net.lingala.zip4j.model.ZipParameters
+import net.lingala.zip4j.model.enums.CompressionMethod
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.nio.charset.StandardCharsets
@@ -101,6 +106,37 @@ class OnDevicePipelineTest {
             "设备端 zip".toByteArray(StandardCharsets.UTF_8),
             result.entries.single().bytes,
         )
+    }
+
+    @Test
+    fun splitZipWorksOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = java.io.File(context.cacheDir, "split-test-${System.currentTimeMillis()}")
+        directory.mkdirs()
+        try {
+            val payload = ByteArray(200_000) { (it * 3).toByte() }
+            val source = java.io.File(directory, "source.bin").apply { writeBytes(payload) }
+            val zip = java.io.File(directory, "archive.zip")
+            val params = ZipParameters().apply { compressionMethod = CompressionMethod.STORE }
+            ZipFile(zip).createSplitZipFile(listOf(source), params, true, 65536)
+
+            val parts = directory.listFiles()!!
+                .filter { it.isFile && it.name.startsWith("archive.") }
+                .map { ArchivePart(it.name, it.readBytes()) }
+            assertTrue(parts.size >= 2)
+
+            val group = ArchiveExtractor.splitGroup(
+                parts.first { it.name.endsWith(".zip") }.name,
+                parts,
+            )
+            assertNotNull(group)
+            assertTrue(group!!.missing.isEmpty())
+
+            val result = ArchiveExtractor.extractGroup(group, null, directory)
+            assertArrayEquals(payload, result.entries.single().bytes)
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 
     @Test

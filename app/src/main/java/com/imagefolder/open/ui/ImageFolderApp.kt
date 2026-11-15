@@ -39,6 +39,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val packState by viewModel.pack.collectAsState()
     val extractState by viewModel.extract.collectAsState()
     val compatMode by viewModel.compatMode.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
     val message by viewModel.message.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -89,7 +90,12 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
             when (selectedTab) {
                 0 -> PackScreen(state = packState, compatMode = compatMode, viewModel = viewModel)
                 1 -> ExtractScreen(state = extractState, viewModel = viewModel)
-                else -> AboutScreen(compatMode = compatMode, onCompatModeChange = viewModel::setCompatMode)
+                else -> AboutScreen(
+                    compatMode = compatMode,
+                    onCompatModeChange = viewModel::setCompatMode,
+                    themeMode = themeMode,
+                    onThemeModeChange = viewModel::setThemeMode,
+                )
             }
         }
     }

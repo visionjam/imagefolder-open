@@ -36,6 +36,21 @@ data class ArchiveExtractResult(
     val entries: List<ArchiveEntry>,
 )
 
+data class ArchivePart(
+    val name: String,
+    val bytes: ByteArray,
+)
+
+data class SplitGroupInfo(
+    val format: ArchiveFormat,
+    val baseName: String,
+    val parts: List<ArchivePart>,
+    val missing: List<String>,
+)
+
+class ArchiveMissingPartsException(val missing: List<String>) :
+    Exception("缺少分卷：${missing.joinToString()}")
+
 class ArchivePasswordRequiredException : Exception("需要密码")
 
 class ArchiveWrongPasswordException : Exception("密码错误")
@@ -77,6 +92,23 @@ object ArchiveExtractor {
         if (hasMagic(data, byteArrayOf(0x52, 0x61, 0x72, 0x21))) return ArchiveFormat.RAR
         if (looksLikeTar(data)) return ArchiveFormat.TAR
 
+        val lowerName = fileName?.lowercase()
+        if (lowerName != null) {
+            if (lowerName.matches(Regex(""".*\.z\d{2,}$""")) ||
+                lowerName.matches(Regex(""".*\.zip\.\d{3,}$"""))
+            ) {
+                return ArchiveFormat.ZIP
+            }
+            if (lowerName.matches(Regex(""".*\.7z\.\d{3,}$"""))) {
+                return ArchiveFormat.SEVEN_Z
+            }
+            if (lowerName.matches(Regex(""".*\.part\d+\.rar$""")) ||
+                lowerName.matches(Regex(""".*\.r\d{2}$"""))
+            ) {
+                return ArchiveFormat.RAR
+            }
+        }
+
         return when (fileName?.substringAfterLast('.', "")?.lowercase()) {
             "zip", "jar", "apk" -> ArchiveFormat.ZIP
             "7z" -> ArchiveFormat.SEVEN_Z
@@ -97,6 +129,163 @@ object ArchiveExtractor {
         ArchiveFormat.BZIP2,
         ArchiveFormat.XZ -> true
         ArchiveFormat.RAR, ArchiveFormat.UNKNOWN -> false
+    }
+
+    fun splitGroup(clickedName: String, all: List<ArchivePart>): SplitGroupInfo? {
+        val clicked = parseSplitName(clickedName) ?: return null
+        val unique = LinkedHashMap<String, ArchivePart>()
+        for (part in all) {
+            val key = part.name.lowercase()
+            if (key !in unique) unique[key] = part
+        }
+        val parsed = unique.values.mapNotNull { part ->
+            val info = parseSplitName(part.name) ?: return@mapNotNull null
+            if (info.family != clicked.family || info.baseKey != clicked.baseKey) {
+                null
+            } else {
+                info to part
+            }
+        }
+
+        return when (clicked.family) {
+            SplitFamily.ZIP_CLASSIC -> {
+                val numbered = parsed.filter { !it.first.isFinalZip }.sortedBy { it.first.index }
+                val finalPart = parsed.firstOrNull { it.first.isFinalZip }?.second
+                if (numbered.isEmpty()) return null
+                val maxIndex = numbered.maxOf { it.first.index }
+                val missing = mutableListOf<String>()
+                for (index in 1..maxIndex) {
+                    if (numbered.none { it.first.index == index }) {
+                        missing += clicked.baseName + ".z" + index.toString().padStart(2, '0')
+                    }
+                }
+                if (finalPart == null) missing += clicked.baseName + ".zip"
+                SplitGroupInfo(
+                    format = ArchiveFormat.ZIP,
+                    baseName = clicked.baseName,
+                    parts = numbered.map { it.second } + listOfNotNull(finalPart),
+                    missing = missing,
+                )
+            }
+            SplitFamily.ZIP_NUMBERED, SplitFamily.SEVEN_Z_NUMBERED -> {
+                if (parsed.isEmpty()) return null
+                val sorted = parsed.sortedBy { it.first.index }
+                val maxIndex = sorted.maxOf { it.first.index }
+                val missing = (1..maxIndex)
+                    .filter { index -> sorted.none { it.first.index == index } }
+                    .map { index ->
+                        clicked.baseWithExtension + "." + index.toString().padStart(3, '0')
+                    }
+                SplitGroupInfo(
+                    format = clicked.format,
+                    baseName = clicked.baseName,
+                    parts = sorted.map { it.second },
+                    missing = missing,
+                )
+            }
+        }
+    }
+
+    fun extractGroup(
+        group: SplitGroupInfo,
+        password: String?,
+        tempDir: File?,
+    ): ArchiveExtractResult {
+        if (group.missing.isNotEmpty()) throw ArchiveMissingPartsException(group.missing)
+        val limits = Limits()
+        val entries = when (group.format) {
+            ArchiveFormat.ZIP -> extractZipParts(group.parts, password, tempDir, limits)
+            ArchiveFormat.SEVEN_Z -> {
+                val joined = ByteArrayOutputStream()
+                group.parts.forEach { joined.write(it.bytes) }
+                extractSevenZ(joined.toByteArray(), password, limits)
+            }
+            else -> throw ArchiveUnsupportedException("不支持的压缩分卷格式")
+        }
+        return ArchiveExtractResult(group.format, entries)
+    }
+
+    private enum class SplitFamily {
+        ZIP_CLASSIC,
+        ZIP_NUMBERED,
+        SEVEN_Z_NUMBERED,
+    }
+
+    private data class SplitName(
+        val format: ArchiveFormat,
+        val family: SplitFamily,
+        val baseKey: String,
+        val baseName: String,
+        val baseWithExtension: String,
+        val index: Int,
+        val isFinalZip: Boolean,
+    )
+
+    private fun parseSplitName(rawName: String): SplitName? {
+        val name = rawName.substringAfterLast('/').substringAfterLast('\\')
+        val lower = name.lowercase()
+
+        Regex("""^(.+)\.z(\d{2,})$""").matchEntire(lower)?.let { match ->
+            val digits = match.groupValues[2]
+            val baseEnd = name.length - digits.length - 2
+            if (baseEnd <= 0) return null
+            val base = name.substring(0, baseEnd)
+            return SplitName(
+                format = ArchiveFormat.ZIP,
+                family = SplitFamily.ZIP_CLASSIC,
+                baseKey = base.lowercase(),
+                baseName = base,
+                baseWithExtension = base,
+                index = digits.toInt(),
+                isFinalZip = false,
+            )
+        }
+        Regex("""^(.+)\.zip$""").matchEntire(lower)?.let {
+            if (name.length <= 4) return null
+            val base = name.dropLast(4)
+            return SplitName(
+                format = ArchiveFormat.ZIP,
+                family = SplitFamily.ZIP_CLASSIC,
+                baseKey = base.lowercase(),
+                baseName = base,
+                baseWithExtension = base,
+                index = Int.MAX_VALUE,
+                isFinalZip = true,
+            )
+        }
+        Regex("""^(.+)\.zip\.(\d{3,})$""").matchEntire(lower)?.let { match ->
+            val digits = match.groupValues[2]
+            val baseEnd = name.length - digits.length - 1
+            if (baseEnd <= 0) return null
+            val baseWithExtension = name.substring(0, baseEnd)
+            if (!baseWithExtension.lowercase().endsWith(".zip")) return null
+            return SplitName(
+                format = ArchiveFormat.ZIP,
+                family = SplitFamily.ZIP_NUMBERED,
+                baseKey = baseWithExtension.lowercase(),
+                baseName = baseWithExtension.dropLast(4),
+                baseWithExtension = baseWithExtension,
+                index = digits.toInt(),
+                isFinalZip = false,
+            )
+        }
+        Regex("""^(.+)\.7z\.(\d{3,})$""").matchEntire(lower)?.let { match ->
+            val digits = match.groupValues[2]
+            val baseEnd = name.length - digits.length - 1
+            if (baseEnd <= 0) return null
+            val baseWithExtension = name.substring(0, baseEnd)
+            if (!baseWithExtension.lowercase().endsWith(".7z")) return null
+            return SplitName(
+                format = ArchiveFormat.SEVEN_Z,
+                family = SplitFamily.SEVEN_Z_NUMBERED,
+                baseKey = baseWithExtension.lowercase(),
+                baseName = baseWithExtension.dropLast(3),
+                baseWithExtension = baseWithExtension,
+                index = digits.toInt(),
+                isFinalZip = false,
+            )
+        }
+        return null
     }
 
     fun extract(
@@ -129,9 +318,67 @@ object ArchiveExtractor {
         val directory = tempDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
         if (!directory.exists()) directory.mkdirs()
         val temporary = File.createTempFile("imagefolder-", ".zip", directory)
-        try {
+        return try {
             temporary.writeBytes(data)
-            val zip = ZipFile(temporary)
+            extractZipFile(temporary, password, limits)
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    private fun extractZipParts(
+        parts: List<ArchivePart>,
+        password: String?,
+        tempDir: File?,
+        limits: Limits,
+    ): List<ArchiveEntry> {
+        if (parts.isEmpty()) throw ArchiveFormatException("没有可用的分卷")
+        val directory = tempDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+        if (!directory.exists()) directory.mkdirs()
+        val work = File(directory, "imagefolder-split-${System.nanoTime()}")
+        if (!work.mkdirs()) throw ArchiveFormatException("无法创建临时目录")
+        return try {
+            val numbered = parts.any { part ->
+                part.name.matches(Regex(""".*\.zip\.\d{3,}$""", RegexOption.IGNORE_CASE))
+            }
+            val files = if (numbered) {
+                val sorted = parts.sortedBy { part ->
+                    part.name.substringAfterLast('.').toIntOrNull() ?: Int.MAX_VALUE
+                }
+                val baseWithExtension = sorted.first().name.substringBeforeLast('.')
+                val base = if (baseWithExtension.lowercase().endsWith(".zip")) {
+                    baseWithExtension.dropLast(4)
+                } else {
+                    baseWithExtension
+                }
+                sorted.mapIndexed { index, part ->
+                    val name = if (index == sorted.lastIndex) {
+                        "$base.zip"
+                    } else {
+                        base + ".z" + (index + 1).toString().padStart(2, '0')
+                    }
+                    File(work, name).apply { writeBytes(part.bytes) }
+                }
+            } else {
+                parts.map { part ->
+                    File(work, File(part.name).name).apply { writeBytes(part.bytes) }
+                }
+            }
+            val target = files.lastOrNull { it.name.endsWith(".zip", ignoreCase = true) }
+                ?: files.first()
+            extractZipFile(target, password, limits)
+        } finally {
+            work.deleteRecursively()
+        }
+    }
+
+    private fun extractZipFile(
+        file: File,
+        password: String?,
+        limits: Limits,
+    ): List<ArchiveEntry> {
+        try {
+            val zip = ZipFile(file)
             if (zip.isEncrypted) {
                 if (password.isNullOrEmpty()) throw ArchivePasswordRequiredException()
                 zip.setPassword(password.toCharArray())
@@ -167,8 +414,6 @@ object ArchiveExtractor {
             throw e
         } catch (e: Exception) {
             throw ArchiveFormatException(e.message ?: "ZIP 解压失败")
-        } finally {
-            temporary.delete()
         }
     }
 

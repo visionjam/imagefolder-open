@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Image Folder</string>
+
+    <string name="tab_pack">Pack</string>
+    <string name="tab_extract">Extract</string>
+    <string name="tab_about">About</string>
+
+    <string name="pack_title">Pack</string>
+    <string name="cover_section">Cover image (optional)</string>
+    <string name="cover_hint">The image that carries the payload. If omitted, a placeholder image is generated.</string>
+    <string name="pick_cover">Choose cover</string>
+    <string name="clear">Clear</string>
+
+    <string name="payload_section">Files to hide</string>
+    <string name="payload_empty">No files added yet</string>
+    <string name="pick_payloads">Add files (multiple)</string>
+    <string name="pick_payload_compat">Add image (compat mode, single)</string>
+
+    <string name="folder_section">Folders (keep directory structure)</string>
+    <string name="folder_empty">No folders added yet</string>
+    <string name="pick_folder">Add folder</string>
+    <string name="folder_file_count">%1$d files</string>
+
+    <string name="options_section">Pack options</string>
+    <string name="compress_title">Compress (ZIP)</string>
+    <string name="compress_summary">Deflate the contents to reduce the image size.</string>
+    <string name="encrypt_title">Encrypt (AES-256-GCM)</string>
+    <string name="encrypt_summary">Encrypt the whole bundle; a password is required to extract.</string>
+    <string name="password_label">Password</string>
+    <string name="password_confirm_label">Confirm password</string>
+    <string name="password_hint">Passwords are not stored and cannot be recovered.</string>
+    <string name="password_mismatch">Passwords do not match</string>
+    <string name="password_required">Enter a password</string>
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+    <string name="advanced_hint">Compression, encryption or folders use the new format and require this app to extract. With all disabled, output stays compatible with the original app.</string>
+
+    <string name="note_label">Note (optional)</string>
+    <string name="note_hint">Drawn in the top-right corner</string>
+
+    <string name="generate">Generate image</string>
+    <string name="generating">Generating…</string>
+
+    <string name="extract_title">Extract</string>
+    <string name="extract_section">Extract from images</string>
+    <string name="extract_hint">Select PNG images created by Image Folder. Multiple selection supported.</string>
+    <string name="pick_extract">Choose image folders (multiple)</string>
+    <string name="extract_button">Extract</string>
+    <string name="extract_empty">No images selected</string>
+    <string name="extract_running">Extracting…</string>
+    <string name="extract_results">Results</string>
+    <string name="extract_selected">%1$d images selected</string>
+    <string name="source_from">From %1$s</string>
+    <string name="file_size_unknown">Unknown size</string>
+    <string name="save_to_gallery">Save to gallery</string>
+    <string name="msg_open_failed">Cannot open this file</string>
+    <string name="saved_badge">Saved</string>
+    <string name="encrypted_badge">Encrypted</string>
+    <string name="directory_badge">Folder</string>
+
+    <string name="save">Save</string>
+    <string name="save_all">Save all</string>
+    <string name="unpack">Unpack</string>
+    <string name="unpacking">Unpacking…</string>
+    <string name="msg_unpacked">Unpacked %1$d files</string>
+    <string name="msg_unpack_failed">Unpack failed: %1$s</string>
+    <string name="msg_unpack_unsupported">Unsupported format: %1$s</string>
+    <string name="msg_missing_parts">Missing volumes: %1$s</string>
+    <string name="archive_password_message">This archive is encrypted. Enter its password.</string>
+    <string name="open">Open</string>
+    <string name="preview">Preview</string>
+    <string name="done">Done</string>
+    <string name="back">Back</string>
+    <string name="remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="unlock">Unlock</string>
+    <string name="export_to_folder">Export to folder</string>
+    <string name="exporting">Exporting…</string>
+
+    <string name="password_dialog_title">Enter password</string>
+    <string name="password_dialog_message">The content in this image is encrypted. Enter the password used when packing.</string>
+    <string name="password_wrong">Wrong password. Try again.</string>
+
+    <string name="msg_need_payload">Add files or folders to hide first</string>
+    <string name="msg_need_sources">Select images to extract first</string>
+    <string name="msg_no_hidden_files">No hidden files found in these images</string>
+    <string name="msg_generate_failed">Generation failed: %1$s</string>
+    <string name="msg_extract_failed">Extraction failed: %1$s</string>
+    <string name="msg_saved_to">Saved %1$d files to %2$s</string>
+    <string name="msg_saved_one">Saved to %1$s/%2$s</string>
+    <string name="msg_save_failed">Save failed: %1$s</string>
+    <string name="msg_open_needs_save">Save this file before opening it</string>
+    <string name="msg_preview_failed">Cannot preview this file</string>
+    <string name="msg_some_files_failed">%1$d files could not be read and were skipped</string>
+    <string name="msg_exported">Exported %1$d files</string>
+    <string name="msg_export_partial">Exported %1$d files, %2$d failed</string>
+    <string name="msg_export_failed">Export failed: %1$s</string>
+    <string name="msg_directory_skipped">Folder entries cannot be saved to the gallery. Use Export to folder.</string>
+    <string name="generated_entries">%1$d entries</string>
+
+    <string name="generated_title">Generated image</string>
+    <string name="generated_saved">Saved to %1$s</string>
+
+    <string name="about_version">Version %1$s</string>
+    <string name="about_description">An open-source tool that hides any file inside a PNG image. Supports ZIP compression, AES-256-GCM encryption, directory structure, and unpacking ZIP/7z/TAR/GZ/BZ2/XZ. Basic output remains fully compatible with the original Image Folder app.</string>
+    <string name="about_archives">ZIP, 7z, TAR, GZ, BZ2 and XZ files in extraction results can be unpacked in-app (ZIP/7z passwords and split ZIP/7z are supported). RAR is not supported.</string>
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="about_compat_title">Compatibility mode</string>
+    <string name="about_compat_summary">When enabled, adding files is limited to picking a single image from the gallery (for older systems or picker issues).</string>
+    <string name="about_disclaimer_title">Disclaimer</string>
+    <string name="about_disclaimer">This app is for technical research and personal backup only. Do not use it to distribute illegal content or infringe others\' rights. You are responsible for your actions.</string>
+    <string name="about_open_source_title">About this project</string>
+    <string name="about_open_source">An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it is not affiliated with the original author. UI built with Material Design 3 and licensed under GPL-3.0.</string>
+    <string name="about_license">License: GNU GPL v3.0</string>
+    <string name="about_project_title">Project</string>
+    <string name="about_project_url">https://github.com/visionjam/imagefolder-open</string>
+    <string name="about_bundle_title">v0.2 format</string>
+    <string name="about_archives_title">Archive support</string>
+    <string name="about_format_title">Data format</string>
+    <string name="about_format">Base data is stored in the private PNG chunk tpWj: JSON header + 0x00 + data, with CRC32 per the PNG spec. v0.2 ZIP/encrypted payloads use an IFB2 envelope in the same chunk.</string>
+    <string name="about_bundle_format">Added in v0.2: ZIP directory structure, compression and AES-256-GCM encryption. Images using these features require this app to extract; otherwise they remain interoperable with the original.</string>
+    <string name="about_tank_note">Default output name follows the original style: Tank_timestamp.png</string>
+</resources>

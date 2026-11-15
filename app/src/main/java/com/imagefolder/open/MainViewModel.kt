@@ -10,6 +10,8 @@ import com.imagefolder.open.core.ArchiveEntry
 import com.imagefolder.open.core.ArchiveExtractor
 import com.imagefolder.open.core.ArchiveFormat
 import com.imagefolder.open.core.ArchiveFormatException
+import com.imagefolder.open.core.ArchiveMissingPartsException
+import com.imagefolder.open.core.ArchivePart
 import com.imagefolder.open.core.ArchivePasswordRequiredException
 import com.imagefolder.open.core.ArchiveUnsupportedException
 import com.imagefolder.open.core.ArchiveWrongPasswordException
@@ -37,6 +39,12 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
+}
 
 data class GeneratedResult(
     val fileName: String,
@@ -99,6 +107,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
 
+    private val _themeMode = MutableStateFlow(
+        runCatching {
+            ThemeMode.valueOf(
+                prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name,
+            )
+        }.getOrDefault(ThemeMode.SYSTEM),
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -113,6 +130,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCompatMode(enabled: Boolean) {
         _compatMode.value = enabled
         prefs.edit().putBoolean(KEY_COMPAT_MODE, enabled).apply()
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
     fun setCover(uri: Uri?) {
@@ -504,6 +526,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (state.unpackingIndex != null) return
 
+        val candidates = state.results
+            .filter { !it.isDirectory }
+            .map { ArchivePart(it.name, it.bytes) }
+        val splitGroup = ArchiveExtractor.splitGroup(item.name, candidates)
+        if (splitGroup != null && splitGroup.missing.isNotEmpty()) {
+            val listed = splitGroup.missing.take(6).joinToString(", ") +
+                if (splitGroup.missing.size > 6) " …" else ""
+            showMessage(app.getString(R.string.msg_missing_parts, listed))
+            return
+        }
+
         _extract.update {
             it.copy(
                 unpackingIndex = index,
@@ -514,9 +547,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    ArchiveExtractor.extract(item.bytes, item.name, password, app.cacheDir)
+                    if (splitGroup != null) {
+                        ArchiveExtractor.extractGroup(splitGroup, password, app.cacheDir)
+                    } else {
+                        ArchiveExtractor.extract(item.bytes, item.name, password, app.cacheDir)
+                    }
                 }
-                val additions = buildUnpackedItems(item, result.entries)
+                val additions = buildUnpackedItems(item, result.entries, splitGroup?.baseName)
                 _extract.update { current ->
                     current.copy(
                         results = current.results + additions,
@@ -550,6 +587,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: ArchiveUnsupportedException) {
                 _extract.update { it.copy(unpackingIndex = null) }
                 showMessage(e.message ?: app.getString(R.string.msg_unpack_unsupported, format.label))
+            } catch (e: ArchiveMissingPartsException) {
+                _extract.update { it.copy(unpackingIndex = null) }
+                showMessage(app.getString(R.string.msg_missing_parts, e.missing.joinToString(", ")))
             } catch (e: ArchiveFormatException) {
                 _extract.update { it.copy(unpackingIndex = null) }
                 showMessage(app.getString(R.string.msg_unpack_failed, e.message ?: ""))
@@ -573,9 +613,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildUnpackedItems(
         item: ExtractItem,
         entries: List<ArchiveEntry>,
+        baseNameOverride: String? = null,
     ): List<ExtractItem> {
         val used = _extract.value.results.mapTo(mutableSetOf()) { it.relativePath }
-        val baseName = item.name.substringBeforeLast('.', item.name).ifEmpty { "解压" }
+        val baseName = baseNameOverride
+            ?: item.name.substringBeforeLast('.', item.name).ifEmpty { "解压" }
         val prefix = BundlePaths.uniqueDirectoryPath(
             BundlePaths.sanitizeSegment(baseName) + "/",
             used,
@@ -714,5 +756,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val PREFS_NAME = "settings"
         const val KEY_COMPAT_MODE = "compat_mode"
+        const val KEY_THEME_MODE = "theme_mode"
     }
 }
