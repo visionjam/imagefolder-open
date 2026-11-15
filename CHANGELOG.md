@@ -1,5 +1,39 @@
 # 更新日志
 
+## v0.9.0 — 2026-11-15
+
+### 新增
+
+- **RAR 解压支持**（基于 libarchive，BSD-2-Clause）：
+  - RAR5 单卷、固实、分卷（`.part1.rar` / `.part01.rar`…）
+  - RAR4 单卷、非固实、分卷（`.rar` + `.r00` / `.r01`…）
+  - 缺少分卷时列出缺失文件名；解压结果保留目录结构，可继续嵌套解压
+  - 加密 RAR（密码/加密头）与固实 RAR4 会给出明确提示
+
+### 变更
+
+- 新增 `app/libs/libarchive-android-1.1.6-libarchive-3.8.8.aar`：Java 绑定取自
+  `me.zhanghai.android.libarchive:library:1.1.6`，native 库取自 `1.1.7`（libarchive 3.8.8，
+  含 2026 年 RAR5 安全修复）；复现脚本见 `scripts/repack-libarchive-aar.sh`
+- RAR 使用 libarchive 而非 unRAR/junrar，保持项目 GPL-3.0 许可证兼容
+- release APK 只打包 `arm64-v8a` / `armeabi-v7a`，体积从约 3 MB 增至约 7 MB；
+  需要 x86 模拟器时可在 `ndk.abiFilters` 中加回
+- 关于页、README、`docs/ARCHIVES.md` 更新 RAR 支持范围与许可证说明
+- 版本号 0.9.0
+
+### 未支持
+
+- 加密 RAR（密码、加密头）——libarchive 的 RAR 读取器不提供解密
+- 固实 RAR4
+- 创建 RAR 压缩包
+- ISO / CAB / DEB / RPM、ZSTD
+
+### 测试
+
+- 79 个 JVM 单元测试（新增 RAR 识别、旧/新分卷分组、缺失分卷、入口注入与错误映射）
+- 新增 8 个真机 RAR 用例（`RarExtractionTest`，fixture 来自 libarchive 3.8.11 测试套件）；
+  当前环境没有 ADB/模拟器，已编译但未执行
+
 ## v0.8.0 — 2026-11-15
 
 ### 新增

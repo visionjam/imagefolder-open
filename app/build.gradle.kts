@@ -13,11 +13,14 @@ android {
         applicationId = "com.imagefolder.open"
         minSdk = 29
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.8.0"
+        versionCode = 10
+        versionName = "0.9.0"
         vectorDrawables { useSupportLibrary = true }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("zh", "en")
+        // libarchive ships four ABIs; release devices are ARM. Add x86/x86_64 back
+        // if you need an emulator build.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     buildTypes {
@@ -71,6 +74,9 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.10")
     implementation("net.lingala.zip4j:zip4j:2.11.5")
+    // Repackaged from me.zhanghai.android.libarchive:library:1.1.6 (compileSdk 35 compatible)
+    // with the 1.1.7 native libraries (libarchive 3.8.8, includes the 2026 RAR5 fixes).
+    implementation(files("libs/libarchive-android-1.1.6-libarchive-3.8.8.aar"))
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

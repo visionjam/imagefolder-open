@@ -36,7 +36,8 @@ release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outpu
 
 ```bash
 BT=$ANDROID_HOME/build-tools/35.0.0
-$BT/zipalign -f -p 4 \
+# 16 KB page-size devices: keep shared libraries 16 KB aligned.
+$BT/zipalign -f -P 16 4 \
   app/build/outputs/apk/release/app-release-unsigned.apk \
   dist/app-release-aligned.apk
 

@@ -14,15 +14,17 @@
 | GZIP | `.gz` `.tgz` | — | `.tar.gz` / `.tgz` 自动识别内层 TAR；否则作为单文件解压 |
 | BZIP2 | `.bz2` `.tbz` `.tbz2` | — | `.tar.bz2` 自动识别内层 TAR |
 | XZ | `.xz` `.txz` | — | `.tar.xz` 自动识别内层 TAR |
-| RAR | `.rar` | — | ❌ 暂不支持，会提示 |
+| RAR | `.rar` | — | ✅ 无密码 RAR5（含固实）与非固实 RAR4；使用 libarchive |
+| 分卷 RAR | `.rar` + `.r00`…，或 `.part1.rar`… | — | ✅ 需要同组分卷都在提取结果中 |
 
-暂不支持：RAR 与 RAR 分卷、ISO/CAB/DEB/RPM、ZSTD 等。RAR 需要额外的原生库；如后续需要可评估引入。
+暂不支持：加密 RAR（密码或加密头）、固实 RAR4、ISO/CAB/DEB/RPM、ZSTD 等。libarchive 的 RAR 实现不提供解密；加密 RAR 会给出明确提示。
 
 ## 行为
 
 - 点击提取结果行中的「解压」即可。
 - **分卷**：点击任一分卷，应用会从当前提取结果中收集同组文件。缺少分卷时会列出缺失文件名，不会尝试解压。
 - 分卷 ZIP 同时支持 `.z01` 风格和 `.zip.001` 风格；分卷 7z 要求 `.001`、`.002`……连续。
+- 分卷 RAR 同时支持旧式 `.rar` + `.r00`、`.r01`… 和新式 `.part1.rar`、`.part2.rar`…（含 `part01` 补零写法）。
 - 加密 ZIP / 7z 会弹出密码输入框；密码错误会重新提示。
 - 解压结果以压缩包文件名作为目录前缀（例如 `photos.zip` → `photos/...`），避免与已有结果冲突。
 - 解压出的文件如果本身还是压缩包，可以继续解压（嵌套）。
@@ -42,5 +44,11 @@
 | Apache Commons Compress | 7z / TAR / GZ / BZ2 | Apache-2.0 |
 | Zip4j | ZIP（含密码） | Apache-2.0 |
 | XZ for Java | XZ | Public Domain |
+| libarchive | RAR4 / RAR5 | BSD-2-Clause |
+| zhanghai libarchive-android | libarchive 的 Android JNI 绑定 | Apache-2.0 |
+
+RAR 后端使用 `app/libs/libarchive-android-1.1.6-libarchive-3.8.8.aar`：Java 绑定取自
+`me.zhanghai.android.libarchive:library:1.1.6`（兼容 compileSdk 35），native 库取自
+`1.1.7`（libarchive 3.8.8，含 2026 年的 RAR5 修复）。两个版本的 Java API 与 JNI 方法一致。
 
 格式与库选型参考了 [ZipXtract](https://github.com/WirelessAlien/ZipXtract)（GPL-3.0）；本项目未直接复制其代码。

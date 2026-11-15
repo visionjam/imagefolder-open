@@ -36,8 +36,9 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - ZIP (ZipCrypto / AES passwords), 7z (password)
   - TAR, GZ, BZ2, XZ (including `.tar.gz` / `.tar.bz2` / `.tar.xz`)
   - Split ZIP (`.z01`… + `.zip` or `.zip.001`…) and split 7z (`.7z.001`…)
+  - RAR: unencrypted RAR5 (including solid and multi-volume) and non-solid RAR4 (both `.rar` + `.r00`… and `.partN.rar` volumes)
   - Preserves directory structure; nested archives can be unpacked recursively; missing split parts are listed
-  - RAR is not supported
+  - Encrypted RAR (passwords/encrypted headers) and solid RAR4 are not supported
 - **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
 - **Share out**: share a generated image directly; a first-time note explains that chat apps may recompress it and strip the hidden data
 - **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
@@ -100,7 +101,7 @@ Requirements:
 
 ```bash
 ./gradlew assembleDebug
-./gradlew assembleRelease   # R8 + resource shrinking, ~3 MB output
+./gradlew assembleRelease   # R8 + resource shrinking, ~7 MB output (includes RAR native libs)
 ```
 
 The repository's `settings.gradle.kts` prefers Aliyun Maven mirrors, and the Gradle wrapper uses a Tencent Cloud mirror by default (see `gradle/wrapper/gradle-wrapper.properties`), so builds work from mainland China. Outside China, adjust the repository order or switch back to the official Gradle distribution URL.
@@ -161,7 +162,7 @@ app/src/main/java/com/imagefolder/open/
 - JPEG / WebP carriers are re-encoded at quality 95 (EXIF and other metadata are dropped); PNG output is lossless
 - JPEG / WebP carriers can only be extracted by this app; the original Image Folder v1.1 only reads PNG
 - Passwords are not stored; a lost password cannot be recovered
-- RAR, split RAR, ISO / CAB / DEB / RPM and ZSTD are not supported
+- Encrypted RAR (passwords/encrypted headers), solid RAR4, ISO / CAB / DEB / RPM and ZSTD are not supported
 - Split archives must all be present in the current extraction results (same batch of images / envelopes); missing parts are not searched on the device
 - Image payloads are saved to `Pictures/图片文件夹`; other files go to `Download/图片文件夹`. Use "Export to folder" for the full directory structure
 - Switching between Release and debug builds requires an uninstall because the signatures differ
@@ -174,9 +175,10 @@ This app is intended for technical research and personal backup only. Do not use
 
 - Archive format and library choices were informed by [ZipXtract](https://github.com/WirelessAlien/ZipXtract) (GPL-3.0)
 - Uses Apache Commons Compress, XZ for Java (public domain), Zip4j and other open-source libraries
+- RAR extraction uses [libarchive](https://github.com/libarchive/libarchive) (BSD-2-Clause) and [zhanghai libarchive-android](https://github.com/zhanghai/libarchive-android) (Apache-2.0)
 
 ## License
 
 Copyright (C) 2026 Vision Jam
 
-This project is licensed under the **GNU General Public License v3.0**; see [LICENSE](LICENSE).
+This project is licensed under the **GNU General Public License v3.0**; see [LICENSE](LICENSE). Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

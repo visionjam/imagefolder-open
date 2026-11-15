@@ -88,6 +88,8 @@
     <string name="msg_unpacked">Unpacked %1$d files</string>
     <string name="msg_unpack_failed">Unpack failed: %1$s</string>
     <string name="msg_unpack_unsupported">Unsupported format: %1$s</string>
+    <string name="msg_unpack_rar_encrypted">Encrypted RAR archives are not supported yet</string>
+    <string name="msg_unpack_rar4_solid">Solid RAR4 archives are not supported yet</string>
     <string name="msg_missing_parts">Missing volumes: %1$s</string>
     <string name="archive_password_message">This archive is encrypted. Enter its password.</string>
     <string name="open">Open</string>
@@ -143,7 +145,7 @@
     <string name="about_version_with_code">Version %1$s (%2$d)</string>
     <string name="about_tagline">An open-source tool for hiding files inside images</string>
     <string name="about_description">Supports PNG, JPEG and WebP carriers, ZIP compression, AES-256-GCM encryption and directory structures. PNG output without advanced features remains fully compatible with the original Image Folder tpWj format.</string>
-    <string name="about_archives">ZIP, 7z, TAR, GZ, BZ2 and XZ files in extraction results can be unpacked in-app (ZIP/7z passwords and split ZIP/7z are supported). RAR is not supported.</string>
+    <string name="about_archives">ZIP, 7z, TAR, GZ, BZ2, XZ and RAR files in extraction results can be unpacked in-app (ZIP/7z passwords and split archives are supported; RAR supports unencrypted RAR5 including solid/multi-volume and non-solid RAR4, but not RAR passwords or solid RAR4).</string>
     <string name="theme_title">Theme</string>
     <string name="theme_system">Follow system</string>
     <string name="theme_light">Light</string>
@@ -171,7 +173,7 @@
     <string name="about_licenses_title">Open-source licenses</string>
     <string name="about_licenses_summary">App and third-party components</string>
     <string name="about_licenses_dialog_title">Open-source licenses</string>
-    <string name="about_licenses_body">This app: GNU GPL v3.0\n\nAndroidX, Jetpack Compose, Kotlin: Apache License 2.0\n\nApache Commons Compress / IO / Lang / Codec, zip4j, kotlinx.coroutines, kotlinx.serialization: Apache License 2.0\n\nXZ for Java: Public Domain\n\nFull license texts are available in the repository LICENSE file and the respective dependency repositories.</string>
+    <string name="about_licenses_body">This app: GNU GPL v3.0\n\nAndroidX, Jetpack Compose, Kotlin: Apache License 2.0\n\nApache Commons Compress / IO / Lang / Codec, zip4j, kotlinx.coroutines, kotlinx.serialization: Apache License 2.0\n\nXZ for Java: Public Domain\n\nlibarchive: BSD 2-Clause\n\nzhanghai libarchive-android: Apache License 2.0\n\nFull license texts are available in the repository LICENSE and THIRD_PARTY_NOTICES.md files and the respective dependency repositories.</string>
     <string name="about_licenses_close">Close</string>
     <string name="about_disclaimer_title">Disclaimer</string>
     <string name="about_disclaimer">This app is for technical research and personal backup only. Do not use it to distribute illegal content or infringe others\' rights. You are responsible for your actions.</string>
