@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.imagefolder.open.core.ArchiveEntry
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -186,13 +188,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runCatching { UriUtils.describe(app, uri) }.getOrNull()
                 }
             }
-            val skipped = distinctUris.size - resolved.size
-            if (resolved.isEmpty()) {
+            // Shared URIs only carry a transient read grant; copy them now so
+            // generation and extraction do not depend on the grant later.
+            val imported = withContext(Dispatchers.IO) {
+                resolved.mapIndexedNotNull { index, file -> importSharedFile(app, file, index) }
+            }
+            val skipped = distinctUris.size - imported.size
+            if (imported.isEmpty()) {
                 showMessage(app.getString(R.string.msg_share_no_files))
                 return@launch
             }
             val shared = withContext(Dispatchers.IO) {
-                resolved.map { file ->
+                imported.map { file ->
                     val inspect = file.mime?.startsWith("image/") == true &&
                         ShareClassifier.shouldInspect(file.size)
                     val hasHidden = inspect && runCatching {
@@ -213,7 +220,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             val plan = ShareClassifier.classify(shared)
-            val byUri = resolved.associateBy { it.uri.toString() }
+            val byUri = imported.associateBy { it.uri.toString() }
             val incomingExtract = plan.extractUris.mapNotNull(byUri::get)
             val incomingPack = plan.packUris.mapNotNull(byUri::get)
             val current = _pendingShare.value
@@ -305,6 +312,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         return added
     }
+
+    /**
+     * Copies a shared URI into the app cache before its transient read grant
+     * expires. A stable cache name keeps repeated shares of the same URI deduplicated.
+     */
+    private fun importSharedFile(app: Application, file: PickedFile, index: Int): PickedFile? =
+        runCatching {
+            val root = File(app.cacheDir, "shared-in").apply { mkdirs() }
+            val now = System.currentTimeMillis()
+            root.listFiles()?.forEach { old ->
+                if (now - old.lastModified() > 24L * 60 * 60 * 1000) old.delete()
+            }
+            val fallback = file.uri.lastPathSegment?.substringAfterLast('/')
+            val extension = MimeTypeMap.getSingleton()
+                .getExtensionFromMimeType(file.mime ?: "") ?: "bin"
+            val displayName = if (file.name == fallback) {
+                "shared_${index + 1}.$extension"
+            } else {
+                file.name
+            }
+            val safeName = displayName.replace('/', '_')
+            val key = Integer.toHexString(file.uri.toString().hashCode())
+            val target = File(root, "${key}_$safeName")
+            val input = app.contentResolver.openInputStream(file.uri) ?: return@runCatching null
+            input.use { source ->
+                target.outputStream().use { sink -> source.copyTo(sink) }
+            }
+            PickedFile(
+                uri = Uri.fromFile(target),
+                name = displayName,
+                size = target.length(),
+                mime = file.mime,
+            )
+        }.getOrNull()
 
     fun setCompatMode(enabled: Boolean) {
         _compatMode.value = enabled

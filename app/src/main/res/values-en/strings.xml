@@ -97,14 +97,14 @@
     <string name="msg_export_partial">Exported %1$d files, %2$d failed</string>
     <string name="msg_export_failed">Export failed: %1$s</string>
     <string name="msg_directory_skipped">Folder entries cannot be saved to the gallery. Use Export to folder.</string>
-    <string name="msg_share_added">Added %1$d files</string>
-    <string name="msg_share_added_skipped">Added %1$d files, skipped %2$d unreadable items</string>
+    <string name="msg_share_added">Files added: %1$d</string>
+    <string name="msg_share_added_skipped">Files added: %1$d; skipped: %2$d</string>
     <string name="msg_share_none_added">No new files (already in the list)</string>
     <string name="msg_share_no_files">No readable files</string>
-    <string name="share_choice_skipped">%1$d items could not be read and were skipped</string>
+    <string name="share_choice_skipped">Skipped unreadable items: %1$d</string>
 
     <string name="share_choice_title">Hidden content found</string>
-    <string name="share_choice_message">%1$d images contain hidden files. Extract them, or pack everything as a payload?</string>
+    <string name="share_choice_message">Images with hidden files: %1$d. Extract them, or pack everything as a payload?</string>
     <string name="share_extract_action">Extract hidden content</string>
     <string name="share_pack_action">Pack as payload</string>
     <string name="share_action">Share</string>
