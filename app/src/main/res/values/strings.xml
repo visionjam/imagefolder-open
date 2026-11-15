@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">图片文件夹·开源</string>
+
+    <string name="tab_pack">打包</string>
+    <string name="tab_extract">提取</string>
+    <string name="tab_about">关于</string>
+
+    <string name="pack_title">打包</string>
+    <string name="cover_section">表图（可选）</string>
+    <string name="cover_hint">作为载体的图片。不选时会自动生成一张示意图。</string>
+    <string name="pick_cover">选择表图</string>
+    <string name="clear">清除</string>
+
+    <string name="payload_section">要隐藏的文件</string>
+    <string name="payload_empty">还没有添加文件</string>
+    <string name="pick_payloads">添加文件（可多选）</string>
+    <string name="pick_payload_compat">添加图片（兼容模式，单选）</string>
+
+    <string name="note_label">备注（可选）</string>
+    <string name="note_hint">会绘制在图片右上角</string>
+
+    <string name="generate">生成图片</string>
+    <string name="generating">正在生成…</string>
+
+    <string name="extract_title">提取</string>
+    <string name="extract_section">从图片中提取</string>
+    <string name="extract_hint">选择由「图片文件夹」生成的 PNG 图片，可多选。</string>
+    <string name="pick_extract">选择图片文件夹（可多选）</string>
+    <string name="extract_button">提取</string>
+    <string name="extract_empty">还没有选择图片</string>
+    <string name="extract_running">正在提取…</string>
+    <string name="extract_results">提取结果</string>
+    <string name="extract_selected">已选择 %1$d 张图片</string>
+    <string name="source_from">来自 %1$s</string>
+    <string name="file_size_unknown">大小未知</string>
+    <string name="save_to_gallery">保存到相册</string>
+    <string name="msg_open_failed">无法打开这个文件</string>
+    <string name="saved_badge">已保存</string>
+
+    <string name="save">保存</string>
+    <string name="save_all">全部保存</string>
+    <string name="open">打开</string>
+    <string name="preview">预览</string>
+    <string name="done">完成</string>
+    <string name="back">返回</string>
+    <string name="remove">移除</string>
+
+    <string name="msg_need_payload">请先添加要隐藏的文件</string>
+    <string name="msg_need_sources">请先选择要提取的图片</string>
+    <string name="msg_no_hidden_files">这些图片中没有找到隐藏文件</string>
+    <string name="msg_generate_failed">生成失败：%1$s</string>
+    <string name="msg_extract_failed">提取失败：%1$s</string>
+    <string name="msg_saved_to">已保存 %1$d 个文件到 %2$s</string>
+    <string name="msg_saved_one">已保存到 %1$s/%2$s</string>
+    <string name="msg_save_failed">保存失败：%1$s</string>
+    <string name="msg_open_needs_save">这个文件需要先保存才能打开</string>
+    <string name="msg_preview_failed">无法预览这个文件</string>
+
+    <string name="generated_title">生成结果</string>
+    <string name="generated_saved">已保存到 %1$s</string>
+
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_description">把任意文件藏进 PNG 图片的开源工具。与原「图片文件夹」的 tpWj 数据块格式完全兼容，可以互相打开对方生成的图片。</string>
+    <string name="about_compat_title">兼容模式</string>
+    <string name="about_compat_summary">开启后，添加文件时只允许从相册单选一张图片（用于老系统或选择器异常的设备）。</string>
+    <string name="about_disclaimer_title">免责声明</string>
+    <string name="about_disclaimer">本应用仅供技术研究与个人备份使用。请勿用于传播违法内容或侵犯他人权益，使用者的行为及后果由使用者自行承担。</string>
+    <string name="about_open_source_title">关于本项目</string>
+    <string name="about_open_source">本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现，代码与素材全部重写，与原作者无关。界面采用 Material Design 3。</string>
+    <string name="about_format_title">数据格式</string>
+    <string name="about_format">隐藏数据写入 PNG 的私有数据块 tpWj：JSON 头 + 0x00 + 原始文件字节，CRC32 遵循 PNG 规范。</string>
+    <string name="about_tank_note">默认输出文件名沿用原版风格：Tank_时间戳.png</string>
+</resources>
