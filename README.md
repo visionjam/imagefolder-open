@@ -9,9 +9,10 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 > Current version: **v0.8.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
-  <img src="docs/screenshots/screen-pack.png" width="32%" />
-  <img src="docs/screenshots/screen-extract.png" width="32%" />
-  <img src="docs/screenshots/screen-about.png" width="32%" />
+  <img src="docs/screenshots/screen-pack.png" width="24%" />
+  <img src="docs/screenshots/screen-extract.png" width="24%" />
+  <img src="docs/screenshots/screen-browser.png" width="24%" />
+  <img src="docs/screenshots/screen-about.png" width="24%" />
 </p>
 
 ## Features

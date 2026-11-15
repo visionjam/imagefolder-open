@@ -35,6 +35,18 @@ stored in the bundle header and the reader uses that value.
 - **Recipients with the app and password.** Anyone who has both can extract the
   payload.
 
+### Storage access
+
+By default the app uses only the system Storage Access Framework to read the
+folders and files you pick. It does not request broad storage permissions.
+
+On Android 11+ you can optionally grant **All files access**
+(`MANAGE_EXTERNAL_STORAGE`) in system settings to browse ordinary folders that
+the system picker cannot open, such as the internal storage root or Download.
+This permission is used only for local browsing and scanning; the app still has
+no network permission and uploads nothing. It does not grant access to
+`Android/data` or `Android/obb`.
+
 ### Transit and platform behavior
 
 Chat and social platforms may recompress images, convert them to another
@@ -58,4 +70,5 @@ recovered. There is no backdoor or recovery key.
 - 加密保护载荷内容与内层文件名；不隐藏隐藏数据的存在、条目数量和载体图片本身。
 - 聊天平台可能重新压缩图片导致隐藏数据丢失；请尽量以「文件」形式发送。
 - 密码不会保存，丢失后无法恢复。
+- 「全部文件访问」是可选的系统权限，仅用于本地浏览；不改变无网络权限的立场，且仍无法读取 `Android/data` / `Android/obb`。
 - 漏洞报告请走 GitHub Security Advisories，不要开公开 issue。
