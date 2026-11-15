@@ -19,6 +19,7 @@
 - release APK 只打包 `arm64-v8a` / `armeabi-v7a`，体积从约 3 MB 增至约 7 MB；
   需要 x86 模拟器时可在 `ndk.abiFilters` 中加回
 - 关于页、README、`docs/ARCHIVES.md` 更新 RAR 支持范围与许可证说明
+- RAR 目录条目统一补尾部 `/`，避免被当成文件
 - 版本号 0.9.0
 
 ### 未支持
@@ -32,7 +33,7 @@
 
 - 79 个 JVM 单元测试（新增 RAR 识别、旧/新分卷分组、缺失分卷、入口注入与错误映射）
 - 新增 8 个真机 RAR 用例（`RarExtractionTest`，fixture 来自 libarchive 3.8.11 测试套件）；
-  当前环境没有 ADB/模拟器，已编译但未执行
+  已在 Redmi 24122RKC7C（Android 无线调试）上全部通过
 
 ## v0.8.0 — 2026-11-15
 
