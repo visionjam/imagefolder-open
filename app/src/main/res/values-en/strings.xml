@@ -58,8 +58,9 @@
     <string name="scan_entries">Entries: %1$d</string>
     <string name="scan_encrypted">Encrypted</string>
     <string name="msg_scan_added">Added %1$d images</string>
-    <string name="msg_payload_too_large">The payload exceeds 256 MB. This version loads it into memory at once; split it and try again.</string>
-    <string name="pack_size_hint">Selected files: about %1$s; folders are counted at generation. Limit: 256 MB.</string>
+    <string name="msg_scan_failed">Scan failed: %1$s</string>
+    <string name="msg_payload_too_large">The payload exceeds %1$d MB. This version loads it into memory at once; split it and try again.</string>
+    <string name="pack_size_hint">Selected files: about %1$s; folders are counted at generation. Limit: %2$d MB.</string>
     <string name="extract_selected">%1$d images selected</string>
     <string name="source_from">From %1$s</string>
     <string name="file_size_unknown">Unknown size</string>

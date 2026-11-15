@@ -112,6 +112,99 @@ class CarrierProbeTest {
         assertTrue("read ${counting.readBytes} bytes", counting.readBytes < 64 * 1024)
     }
 
+    @Test
+    fun `malformed header does not throw`() {
+        val payload = "{\"name\":{}}".toByteArray(StandardCharsets.UTF_8) +
+            byteArrayOf(0) +
+            "body".toByteArray(StandardCharsets.UTF_8)
+        val png = pngWithChunks(
+            "IHDR" to ByteArray(13),
+            "tpWj" to payload,
+            "IDAT" to byteArrayOf(0),
+            "IEND" to ByteArray(0),
+        )
+
+        val result = CarrierProbe.probe(png)
+        assertNull(result?.name)
+        assertEquals(1, result?.entries)
+    }
+
+    @Test
+    fun `truncated carriers do not throw`() {
+        val png = PngChunkCodec.insertBundle(
+            minimalPng(), "b.zip", "application/zip", ByteArray(100),
+            false, false, 1,
+        )
+        val jpeg = JpegCarrierCodec.insertBundle(
+            minimalJpeg(), "b.zip", "application/zip", ByteArray(100),
+            false, false, 1,
+        )
+        val webp = WebpCarrierCodec.insertBundle(
+            minimalWebp(), "b.zip", "application/zip", ByteArray(100),
+            false, false, 1,
+        )
+
+        for (carrier in listOf(png, jpeg, webp)) {
+            for (cut in listOf(1, 3, 8, 12, 20, carrier.size / 2)) {
+                val outcome = runCatching {
+                    CarrierProbe.probe(carrier.copyOfRange(0, cut))
+                }
+                assertTrue("cut $cut of ${carrier.size}", outcome.isSuccess)
+            }
+        }
+    }
+
+    @Test
+    fun `large jpeg payload is split and probed with a small read`() {
+        val covered = JpegCarrierCodec.insertBundle(
+            minimalJpeg(), "big.zip", "application/zip",
+            ByteArray(200_000) { it.toByte() }, false, false, 1,
+        )
+        val counting = CountingInputStream(ByteArrayInputStream(covered))
+
+        val result = CarrierProbe.probe(counting)
+
+        assertEquals("big.zip", result?.name)
+        assertTrue("read ${counting.readBytes} bytes", counting.readBytes < 64 * 1024)
+    }
+
+    @Test
+    fun `large webp payload is probed with a small read`() {
+        val covered = WebpCarrierCodec.insertBundle(
+            minimalWebp(), "big.zip", "application/zip",
+            ByteArray(200_000) { it.toByte() }, false, false, 1,
+        )
+        val counting = CountingInputStream(ByteArrayInputStream(covered))
+
+        val result = CarrierProbe.probe(counting)
+
+        assertEquals("big.zip", result?.name)
+        assertTrue("read ${counting.readBytes} bytes", counting.readBytes < 64 * 1024)
+    }
+
+    @Test
+    fun `probe works when skip returns zero`() {
+        val covered = PngChunkCodec.insertFiles(
+            minimalPng(),
+            listOf(HiddenFile("big.bin", null, ByteArray(1_000_000) { 3 })),
+        )
+
+        val result = CarrierProbe.probe(NoSkipInputStream(ByteArrayInputStream(covered)))
+
+        assertEquals("big.bin", result?.name)
+    }
+
+    private class NoSkipInputStream(input: InputStream) : FilterInputStream(input) {
+        override fun skip(n: Long): Long = 0
+    }
+
+    private fun pngWithChunks(vararg chunks: Pair<String, ByteArray>): ByteArray {
+        val signature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        return signature + chunks.fold(ByteArray(0)) { acc, (type, payload) ->
+            acc + pngChunk(type, payload)
+        }
+    }
+
     private class CountingInputStream(input: InputStream) : FilterInputStream(input) {
         var readBytes = 0L
             private set

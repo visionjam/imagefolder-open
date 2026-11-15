@@ -153,7 +153,7 @@ app/src/main/java/com/imagefolder/open/
 ## Known limitations
 
 - Requires Android 10 (API 29) or newer
-- Payloads are limited to 256 MB because files are read fully into memory while packing; split larger sets
+- Payloads are limited to 64 MB because files are read fully into memory and packing keeps several copies; split larger sets
 - JPEG / WebP carriers are re-encoded at quality 95 (EXIF and other metadata are dropped); PNG output is lossless
 - JPEG / WebP carriers can only be extracted by this app; the original Image Folder v1.1 only reads PNG
 - Passwords are not stored; a lost password cannot be recovered

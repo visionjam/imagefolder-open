@@ -223,7 +223,13 @@ fun ExtractScreen(
                     }
                 }
             }
-        } else if (state.scanFolderName != null && state.scanTotal > 0) {
+        } else if (state.scanError != null) {
+            Text(
+                text = state.scanError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else if (state.scanCompleted && state.scanHits.isEmpty()) {
             Text(
                 text = stringResource(R.string.scan_empty),
                 style = MaterialTheme.typography.bodyMedium,

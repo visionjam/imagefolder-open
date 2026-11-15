@@ -58,8 +58,9 @@
     <string name="scan_entries">%1$d 个条目</string>
     <string name="scan_encrypted">已加密</string>
     <string name="msg_scan_added">已加入 %1$d 张图片</string>
-    <string name="msg_payload_too_large">载荷超过 256 MB。当前版本会一次性读入内存，请拆分后再试。</string>
-    <string name="pack_size_hint">已选文件约 %1$s；文件夹在生成时计入，上限 256 MB。</string>
+    <string name="msg_scan_failed">扫描失败：%1$s</string>
+    <string name="msg_payload_too_large">载荷超过 %1$d MB。当前版本会一次性读入内存，请拆分后再试。</string>
+    <string name="pack_size_hint">已选文件约 %1$s；文件夹在生成时计入，上限 %2$d MB。</string>
     <string name="extract_selected">已选择 %1$d 张图片</string>
     <string name="source_from">来自 %1$s</string>
     <string name="file_size_unknown">大小未知</string>

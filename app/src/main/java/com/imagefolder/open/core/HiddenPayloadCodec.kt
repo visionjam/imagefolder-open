@@ -1,12 +1,12 @@
 package com.imagefolder.open.core
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.nio.charset.StandardCharsets
 
@@ -39,15 +39,15 @@ internal object HiddenPayloadCodec {
                 String(payload, 0, separator, StandardCharsets.UTF_8),
             ).jsonObject
         }.getOrNull() ?: return null
-        val name = header["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }
+        val name = (header["name"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
             ?: return null
         return HiddenHeader(
             name = name,
-            mime = header["mime"]?.jsonPrimitive?.contentOrNull,
-            format = header["format"]?.jsonPrimitive?.contentOrNull,
-            encrypted = header["enc"]?.jsonPrimitive?.booleanOrNull,
-            compressed = header["comp"]?.jsonPrimitive?.booleanOrNull,
-            entryCount = header["entries"]?.jsonPrimitive?.intOrNull,
+            mime = (header["mime"] as? JsonPrimitive)?.contentOrNull,
+            format = (header["format"] as? JsonPrimitive)?.contentOrNull,
+            encrypted = (header["enc"] as? JsonPrimitive)?.booleanOrNull,
+            compressed = (header["comp"] as? JsonPrimitive)?.booleanOrNull,
+            entryCount = (header["entries"] as? JsonPrimitive)?.intOrNull,
         )
     }
 
@@ -67,27 +67,17 @@ internal object HiddenPayloadCodec {
         encodeHeader(item) + byteArrayOf(TERMINATOR) + item.bytes
 
     fun parse(payload: ByteArray): HiddenItem? {
+        val header = parseHeader(payload) ?: return null
         val separator = payload.indexOfFirst { it == TERMINATOR }
         if (separator <= 0) return null
-        val header = runCatching {
-            json.parseToJsonElement(
-                String(payload, 0, separator, StandardCharsets.UTF_8),
-            ).jsonObject
-        }.getOrNull() ?: return null
-        val name = header["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() } ?: return null
-        val mime = header["mime"]?.jsonPrimitive?.contentOrNull
-        val format = header["format"]?.jsonPrimitive?.contentOrNull
-        val encrypted = header["enc"]?.jsonPrimitive?.booleanOrNull
-        val compressed = header["comp"]?.jsonPrimitive?.booleanOrNull
-        val entryCount = header["entries"]?.jsonPrimitive?.intOrNull
         return HiddenItem(
-            name = name,
-            mime = mime,
+            name = header.name,
+            mime = header.mime,
             bytes = payload.copyOfRange(separator + 1, payload.size),
-            format = format,
-            encrypted = encrypted,
-            compressed = compressed,
-            entryCount = entryCount,
+            format = header.format,
+            encrypted = header.encrypted,
+            compressed = header.compressed,
+            entryCount = header.entryCount,
         )
     }
 }

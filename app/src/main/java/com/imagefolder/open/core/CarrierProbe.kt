@@ -20,6 +20,7 @@ data class CarrierProbeResult(
 object CarrierProbe {
     private const val MAX_HEADER_BYTES = 4096
     private const val PREFIX_BYTES = 12
+    private const val SKIP_BUFFER_BYTES = 8192
 
     fun probe(bytes: ByteArray): CarrierProbeResult? =
         probe(ByteArrayInputStream(bytes))
@@ -174,14 +175,17 @@ object CarrierProbe {
 
     private fun skipFully(input: InputStream, count: Long) {
         var remaining = count
+        val buffer = ByteArray(SKIP_BUFFER_BYTES)
         while (remaining > 0) {
             val skipped = input.skip(remaining)
             if (skipped > 0) {
                 remaining -= skipped
                 continue
             }
-            if (input.read() < 0) return
-            remaining--
+            val toRead = minOf(remaining, buffer.size.toLong()).toInt()
+            val read = input.read(buffer, 0, toRead)
+            if (read < 0) return
+            remaining -= read
         }
     }
 
