@@ -23,7 +23,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Output names follow the original style: `Tank_20261115_123456.png` / `.jpg` / `.webp`
 - **Folders**: add whole directories through the system picker; directory structure and empty folders are preserved
 - **Compression**: ZIP Deflate to reduce payload size
-- **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (150,000 iterations); a password is required for extraction
+- **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (600,000 iterations); a password is required for extraction. Older bundles are read with the iteration count stored in their header.
 - **Extract**: select multiple PNG / JPEG / WebP images and automatically detect hidden content
   - Preview images directly
   - Save one item or all items to the gallery

@@ -57,7 +57,7 @@ payload         ZIP 数据；加密时为 AES-GCM 密文 + 16 字节 tag
 
 ### 加密部分
 
-- KDF：PBKDF2-HMAC-SHA256，150,000 次迭代，256 位密钥
+- KDF：PBKDF2-HMAC-SHA256，新包使用 600,000 次迭代，256 位密钥；读取时始终使用头部记录的 `iterations`，因此 150,000 次的旧包仍可解开
 - 加密：AES-256-GCM，12 字节随机 nonce，128 位认证 tag
 - AAD：`IFB2` 头部全部字节（magic 到 nonce），防止头部被篡改
 - 每次打包使用新的随机 salt 与 nonce

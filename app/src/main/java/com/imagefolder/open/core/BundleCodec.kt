@@ -49,7 +49,7 @@ object BundleCodec {
     private const val VERSION = 1
     private const val FLAG_ENCRYPTED = 0x01
     private const val FLAG_COMPRESSED = 0x02
-    private const val PBKDF2_ITERATIONS = 150_000
+    private const val PBKDF2_ITERATIONS = 600_000
     private const val MIN_ITERATIONS = 10_000
     private const val MAX_ITERATIONS = 1_000_000
     private const val SALT_LENGTH = 16
