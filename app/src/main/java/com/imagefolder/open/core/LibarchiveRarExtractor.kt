@@ -82,7 +82,8 @@ internal class LibarchiveRarExtractor : RarExtractor {
                 when (LibarchiveEntry.filetype(entry)) {
                     LibarchiveEntry.AE_IFDIR -> {
                         limits.addEntry()
-                        entries += ArchiveEntry(path, ByteArray(0))
+                        val directoryPath = if (path.endsWith("/")) path else "$path/"
+                        entries += ArchiveEntry(directoryPath, ByteArray(0))
                     }
                     LibarchiveEntry.AE_IFREG -> {
                         limits.addEntry()
