@@ -17,6 +17,7 @@ import com.imagefolder.open.core.ArchiveMissingPartsException
 import com.imagefolder.open.core.ArchivePart
 import com.imagefolder.open.core.ArchivePasswordRequiredException
 import com.imagefolder.open.core.ArchiveUnsupportedException
+import com.imagefolder.open.core.ArchiveUnsupportedReason
 import com.imagefolder.open.core.ArchiveWrongPasswordException
 import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
@@ -1014,7 +1015,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: ArchiveUnsupportedException) {
                 _extract.update { it.copy(unpackingIndex = null) }
-                showMessage(e.message ?: app.getString(R.string.msg_unpack_unsupported, format.label))
+                val message = when (e.reason) {
+                    ArchiveUnsupportedReason.RAR_ENCRYPTED ->
+                        app.getString(R.string.msg_unpack_rar_encrypted)
+                    ArchiveUnsupportedReason.RAR4_SOLID ->
+                        app.getString(R.string.msg_unpack_rar4_solid)
+                    null -> e.message
+                        ?: app.getString(R.string.msg_unpack_unsupported, format.label)
+                }
+                showMessage(message)
             } catch (e: ArchiveMissingPartsException) {
                 _extract.update { it.copy(unpackingIndex = null) }
                 showMessage(app.getString(R.string.msg_missing_parts, e.missing.joinToString(", ")))

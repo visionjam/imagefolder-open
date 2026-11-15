@@ -36,8 +36,9 @@
   - ZIP（ZipCrypto / AES 密码）、7z（密码）
   - TAR、GZ、BZ2、XZ（含 `.tar.gz` / `.tar.bz2` / `.tar.xz`）
   - 分卷 ZIP（`.z01`… + `.zip` 或 `.zip.001`…）与分卷 7z（`.7z.001`…）
+  - RAR：无密码 RAR5（含固实、分卷）与非固实 RAR4（含 `.rar` + `.r00`… 和 `.partN.rar` 分卷）
   - 保留目录结构；嵌套压缩包可继续解压；缺少分卷时列出缺失文件
-  - RAR 暂不支持
+  - 加密 RAR（密码/加密头）与固实 RAR4 暂不支持
 - **分享进来**：从其他应用分享文件或图片；普通文件进入打包页，含隐藏内容的图片可选择提取或打包
 - **分享出去**：生成结果可直接分享；首次会提示聊天平台可能重压缩、导致隐藏数据丢失
 - **多语言与主题**：语言可跟随系统或手动选择简体中文 / English；主题同样支持跟随系统 / 浅色 / 深色
@@ -100,7 +101,7 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [d
 
 ```bash
 ./gradlew assembleDebug
-./gradlew assembleRelease   # R8 + 资源收缩，当前产物约 3MB
+./gradlew assembleRelease   # R8 + 资源收缩，当前产物约 7MB（含 RAR native 库）
 ```
 
 仓库的 `settings.gradle.kts` 已优先配置阿里云 Maven 镜像，Gradle wrapper 默认使用腾讯云镜像（见 `gradle/wrapper/gradle-wrapper.properties`），国内网络可直接构建。海外网络可自行调整仓库顺序或换回 Gradle 官方下载地址。
@@ -161,7 +162,7 @@ app/src/main/java/com/imagefolder/open/
 - JPEG / WebP 载体按质量 95 重新编码（会丢失原图 EXIF 等元数据）；PNG 载体无损
 - JPEG / WebP 载体只有本应用能提取，原版「图片文件夹」v1.1 只识别 PNG
 - 加密密码不会保存，丢失后无法恢复
-- RAR、RAR 分卷、ISO / CAB / DEB / RPM、ZSTD 暂不支持
+- 加密 RAR（密码/加密头）、固实 RAR4、ISO / CAB / DEB / RPM、ZSTD 暂不支持
 - 分卷必须全部出现在当前提取结果中（同一批图片/加密包），不会自动在设备上搜索缺失分卷
 - 图片型载荷保存到 `Pictures/图片文件夹`，其他类型保存到 `Download/图片文件夹`；完整目录结构请用「导出到文件夹」
 - 从 Release 版切换到 debug 版（或反之）需要先卸载，因为签名不同
@@ -174,9 +175,10 @@ app/src/main/java/com/imagefolder/open/
 
 - 解压格式与库选型参考了 [ZipXtract](https://github.com/WirelessAlien/ZipXtract)（GPL-3.0）
 - 使用 Apache Commons Compress、XZ for Java（公共领域）、Zip4j 等开源库
+- RAR 解压使用 [libarchive](https://github.com/libarchive/libarchive)（BSD-2-Clause）与 [zhanghai libarchive-android](https://github.com/zhanghai/libarchive-android)（Apache-2.0）
 
 ## License
 
 Copyright (C) 2026 Vision Jam
 
-本项目采用 **GNU General Public License v3.0**，详见 [LICENSE](LICENSE)。
+本项目采用 **GNU General Public License v3.0**，详见 [LICENSE](LICENSE)。第三方组件许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -55,9 +55,44 @@ class ArchivePasswordRequiredException : Exception("需要密码")
 
 class ArchiveWrongPasswordException : Exception("密码错误")
 
-class ArchiveUnsupportedException(message: String) : Exception(message)
+enum class ArchiveUnsupportedReason {
+    RAR_ENCRYPTED,
+    RAR4_SOLID,
+}
+
+class ArchiveUnsupportedException(
+    message: String,
+    val reason: ArchiveUnsupportedReason? = null,
+) : Exception(message)
 
 class ArchiveFormatException(message: String) : Exception(message)
+
+internal fun mapRarFailure(message: String): Exception {
+    val lower = message.lowercase()
+    return when {
+        "encryption is not supported" in lower ||
+            "reading encrypted data" in lower ||
+            "rar encryption support unavailable" in lower ->
+            ArchiveUnsupportedException(
+                "RAR 密码暂不支持",
+                ArchiveUnsupportedReason.RAR_ENCRYPTED,
+            )
+        "rar solid archive support unavailable" in lower ->
+            ArchiveUnsupportedException(
+                "暂不支持固实 RAR4 压缩包",
+                ArchiveUnsupportedReason.RAR4_SOLID,
+            )
+        "unexpected end of volume" in lower ||
+            "mismatch of file parts" in lower ||
+            "truncated" in lower ||
+            "unexpected end of file" in lower ||
+            "end of volume" in lower ->
+            ArchiveFormatException("RAR 分卷不完整")
+        "not supported" in lower ->
+            ArchiveUnsupportedException("RAR 使用了暂不支持的特性：$message")
+        else -> ArchiveFormatException("RAR 解压失败：$message")
+    }
+}
 
 /**
  * Reads common archives found inside hidden files.
@@ -73,6 +108,14 @@ class ArchiveFormatException(message: String) : Exception(message)
 object ArchiveExtractor {
     private const val MAX_ENTRIES = 100_000
     private const val MAX_TOTAL_BYTES = 512L * 1024 * 1024
+
+    @Volatile
+    internal var rarExtractorOverride: RarExtractor? = null
+
+    private val defaultRarExtractor: RarExtractor by lazy { LibarchiveRarExtractor() }
+
+    private fun currentRarExtractor(): RarExtractor =
+        rarExtractorOverride ?: defaultRarExtractor
 
     fun detect(fileName: String?, data: ByteArray): ArchiveFormat {
         if (hasMagic(data, byteArrayOf(0x50, 0x4B, 0x03, 0x04)) ||
@@ -127,8 +170,9 @@ object ArchiveExtractor {
         ArchiveFormat.TAR,
         ArchiveFormat.GZIP,
         ArchiveFormat.BZIP2,
-        ArchiveFormat.XZ -> true
-        ArchiveFormat.RAR, ArchiveFormat.UNKNOWN -> false
+        ArchiveFormat.XZ,
+        ArchiveFormat.RAR -> true
+        ArchiveFormat.UNKNOWN -> false
     }
 
     fun splitGroup(clickedName: String, all: List<ArchivePart>): SplitGroupInfo? {
@@ -183,6 +227,43 @@ object ArchiveExtractor {
                     missing = missing,
                 )
             }
+            SplitFamily.RAR_OLD -> {
+                val first = parsed.firstOrNull { it.first.isFirstRar }?.second
+                val numbered = parsed.filter { !it.first.isFirstRar }.sortedBy { it.first.index }
+                if (numbered.isEmpty()) return null
+                val maxIndex = numbered.maxOf { it.first.index }
+                val missing = mutableListOf<String>()
+                if (first == null) missing += clicked.baseName + ".rar"
+                for (index in 1..maxIndex) {
+                    if (numbered.none { it.first.index == index }) {
+                        missing += clicked.baseName + ".r" + (index - 1).toString().padStart(2, '0')
+                    }
+                }
+                SplitGroupInfo(
+                    format = ArchiveFormat.RAR,
+                    baseName = clicked.baseName,
+                    parts = listOfNotNull(first) + numbered.map { it.second },
+                    missing = missing,
+                )
+            }
+            SplitFamily.RAR_NEW -> {
+                if (parsed.isEmpty()) return null
+                val sorted = parsed.sortedBy { it.first.index }
+                if (sorted.size == 1 && sorted.first().first.index == 1) return null
+                val maxIndex = sorted.maxOf { it.first.index }
+                val width = sorted.maxOf { it.first.numberWidth }
+                val missing = (1..maxIndex)
+                    .filter { index -> sorted.none { it.first.index == index } }
+                    .map { index ->
+                        clicked.baseName + ".part" + index.toString().padStart(width, '0') + ".rar"
+                    }
+                SplitGroupInfo(
+                    format = ArchiveFormat.RAR,
+                    baseName = clicked.baseName,
+                    parts = sorted.map { it.second },
+                    missing = missing,
+                )
+            }
         }
     }
 
@@ -192,7 +273,7 @@ object ArchiveExtractor {
         tempDir: File?,
     ): ArchiveExtractResult {
         if (group.missing.isNotEmpty()) throw ArchiveMissingPartsException(group.missing)
-        val limits = Limits()
+        val limits = ExtractionLimits()
         val entries = when (group.format) {
             ArchiveFormat.ZIP -> extractZipParts(group.parts, password, tempDir, limits)
             ArchiveFormat.SEVEN_Z -> {
@@ -200,6 +281,9 @@ object ArchiveExtractor {
                 group.parts.forEach { joined.write(it.bytes) }
                 extractSevenZ(joined.toByteArray(), password, limits)
             }
+            ArchiveFormat.RAR -> normalizeRarEntries(
+                currentRarExtractor().extractGroup(group.parts, tempDir, limits),
+            )
             else -> throw ArchiveUnsupportedException("不支持的压缩分卷格式")
         }
         return ArchiveExtractResult(group.format, entries)
@@ -209,6 +293,8 @@ object ArchiveExtractor {
         ZIP_CLASSIC,
         ZIP_NUMBERED,
         SEVEN_Z_NUMBERED,
+        RAR_OLD,
+        RAR_NEW,
     }
 
     private data class SplitName(
@@ -219,6 +305,8 @@ object ArchiveExtractor {
         val baseWithExtension: String,
         val index: Int,
         val isFinalZip: Boolean,
+        val isFirstRar: Boolean = false,
+        val numberWidth: Int = 0,
     )
 
     private fun parseSplitName(rawName: String): SplitName? {
@@ -285,6 +373,53 @@ object ArchiveExtractor {
                 isFinalZip = false,
             )
         }
+        Regex("""^(.+)\.part(\d+)\.rar$""").matchEntire(lower)?.let { match ->
+            val digits = match.groupValues[2]
+            val baseEnd = name.length - digits.length - ".part.rar".length
+            if (baseEnd <= 0) return null
+            val base = name.substring(0, baseEnd)
+            return SplitName(
+                format = ArchiveFormat.RAR,
+                family = SplitFamily.RAR_NEW,
+                baseKey = base.lowercase(),
+                baseName = base,
+                baseWithExtension = name,
+                index = digits.toInt(),
+                isFinalZip = false,
+                numberWidth = digits.length,
+            )
+        }
+        Regex("""^(.+)\.r(\d{2})$""").matchEntire(lower)?.let { match ->
+            val digits = match.groupValues[2]
+            val baseEnd = name.length - digits.length - 2
+            if (baseEnd <= 0) return null
+            val base = name.substring(0, baseEnd)
+            return SplitName(
+                format = ArchiveFormat.RAR,
+                family = SplitFamily.RAR_OLD,
+                baseKey = base.lowercase(),
+                baseName = base,
+                baseWithExtension = base + ".rar",
+                index = digits.toInt() + 1,
+                isFinalZip = false,
+                numberWidth = 2,
+            )
+        }
+        Regex("""^(.+)\.rar$""").matchEntire(lower)?.let {
+            if (name.length <= 4) return null
+            val base = name.dropLast(4)
+            return SplitName(
+                format = ArchiveFormat.RAR,
+                family = SplitFamily.RAR_OLD,
+                baseKey = base.lowercase(),
+                baseName = base,
+                baseWithExtension = name,
+                index = 0,
+                isFinalZip = false,
+                isFirstRar = true,
+                numberWidth = 2,
+            )
+        }
         return null
     }
 
@@ -295,7 +430,7 @@ object ArchiveExtractor {
         tempDir: File?,
     ): ArchiveExtractResult {
         val format = detect(fileName, data)
-        val limits = Limits()
+        val limits = ExtractionLimits()
         val entries = when (format) {
             ArchiveFormat.ZIP -> extractZip(data, password, tempDir, limits)
             ArchiveFormat.SEVEN_Z -> extractSevenZ(data, password, limits)
@@ -303,7 +438,9 @@ object ArchiveExtractor {
             ArchiveFormat.GZIP,
             ArchiveFormat.BZIP2,
             ArchiveFormat.XZ -> extractCompressed(format, data, fileName, limits)
-            ArchiveFormat.RAR -> throw ArchiveUnsupportedException("暂不支持 RAR 格式")
+            ArchiveFormat.RAR -> normalizeRarEntries(
+                currentRarExtractor().extract(data, fileName, tempDir, limits),
+            )
             ArchiveFormat.UNKNOWN -> throw ArchiveFormatException("无法识别的压缩格式")
         }
         return ArchiveExtractResult(format, entries)
@@ -313,7 +450,7 @@ object ArchiveExtractor {
         data: ByteArray,
         password: String?,
         tempDir: File?,
-        limits: Limits,
+        limits: ExtractionLimits,
     ): List<ArchiveEntry> {
         val directory = tempDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
         if (!directory.exists()) directory.mkdirs()
@@ -330,7 +467,7 @@ object ArchiveExtractor {
         parts: List<ArchivePart>,
         password: String?,
         tempDir: File?,
-        limits: Limits,
+        limits: ExtractionLimits,
     ): List<ArchiveEntry> {
         if (parts.isEmpty()) throw ArchiveFormatException("没有可用的分卷")
         val directory = tempDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
@@ -375,7 +512,7 @@ object ArchiveExtractor {
     private fun extractZipFile(
         file: File,
         password: String?,
-        limits: Limits,
+        limits: ExtractionLimits,
     ): List<ArchiveEntry> {
         try {
             val zip = ZipFile(file)
@@ -420,7 +557,7 @@ object ArchiveExtractor {
     private fun extractSevenZ(
         data: ByteArray,
         password: String?,
-        limits: Limits,
+        limits: ExtractionLimits,
     ): List<ArchiveEntry> {
         val builder = SevenZFile.builder().setSeekableByteChannel(SeekableInMemoryByteChannel(data))
         if (!password.isNullOrEmpty()) builder.setPassword(password.toCharArray())
@@ -473,7 +610,7 @@ object ArchiveExtractor {
         format: ArchiveFormat,
         data: ByteArray,
         fileName: String?,
-        limits: Limits,
+        limits: ExtractionLimits,
     ): List<ArchiveEntry> {
         val decompressed = try {
             when (format) {
@@ -500,7 +637,7 @@ object ArchiveExtractor {
         return listOf(ArchiveEntry(name, decompressed))
     }
 
-    private fun readTar(data: ByteArray, limits: Limits): List<ArchiveEntry> {
+    private fun readTar(data: ByteArray, limits: ExtractionLimits): List<ArchiveEntry> {
         val entries = mutableListOf<ArchiveEntry>()
         try {
             TarArchiveInputStream(ByteArrayInputStream(data), "UTF-8").use { tar ->
@@ -524,7 +661,7 @@ object ArchiveExtractor {
         return entries
     }
 
-    private fun readLimited(input: java.io.InputStream, limits: Limits): ByteArray {
+    private fun readLimited(input: java.io.InputStream, limits: ExtractionLimits): ByteArray {
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(64 * 1024)
         while (true) {
@@ -552,6 +689,9 @@ object ArchiveExtractor {
         }
         return out.toByteArray()
     }
+
+    private fun normalizeRarEntries(entries: List<ArchiveEntry>): List<ArchiveEntry> =
+        entries.map { ArchiveEntry(normalizePath(it.path), it.bytes) }
 
     private fun normalizePath(raw: String): String {
         if (raw.isEmpty()) throw ArchiveFormatException("压缩包包含空路径")
@@ -622,7 +762,7 @@ object ArchiveExtractor {
         return true
     }
 
-    private class Limits {
+    internal class ExtractionLimits {
         private var entries = 0
         private var bytes = 0L
 

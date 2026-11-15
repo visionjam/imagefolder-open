@@ -9,6 +9,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -92,6 +93,86 @@ class ArchiveSplitTest {
         assertEquals(ArchiveFormat.ZIP, ArchiveExtractor.detect("a.z01", ByteArray(0)))
         assertEquals(ArchiveFormat.ZIP, ArchiveExtractor.detect("a.zip.001", ByteArray(0)))
         assertEquals(ArchiveFormat.SEVEN_Z, ArchiveExtractor.detect("a.7z.002", ByteArray(0)))
+    }
+
+    @Test
+    fun `rar old style parts are grouped`() {
+        val parts = listOf(
+            ArchivePart("archive.rar", byteArrayOf(1)),
+            ArchivePart("archive.r00", byteArrayOf(2)),
+            ArchivePart("archive.r01", byteArrayOf(3)),
+        )
+
+        val group = ArchiveExtractor.splitGroup("archive.r00", parts)
+
+        assertNotNull(group)
+        assertEquals(ArchiveFormat.RAR, group!!.format)
+        assertEquals(
+            listOf("archive.rar", "archive.r00", "archive.r01"),
+            group.parts.map { it.name },
+        )
+        assertTrue(group.missing.isEmpty())
+    }
+
+    @Test
+    fun `rar old style missing first volume is reported`() {
+        val parts = listOf(
+            ArchivePart("archive.r00", byteArrayOf(2)),
+            ArchivePart("archive.r01", byteArrayOf(3)),
+        )
+
+        val group = ArchiveExtractor.splitGroup("archive.r00", parts)
+
+        assertNotNull(group)
+        assertTrue(group!!.missing.contains("archive.rar"))
+    }
+
+    @Test
+    fun `rar new style parts are grouped`() {
+        val parts = listOf(
+            ArchivePart("archive.part1.rar", byteArrayOf(1)),
+            ArchivePart("archive.part2.rar", byteArrayOf(2)),
+            ArchivePart("archive.part3.rar", byteArrayOf(3)),
+        )
+
+        val group = ArchiveExtractor.splitGroup("archive.part1.rar", parts)
+
+        assertNotNull(group)
+        assertEquals(ArchiveFormat.RAR, group!!.format)
+        assertEquals(
+            listOf("archive.part1.rar", "archive.part2.rar", "archive.part3.rar"),
+            group.parts.map { it.name },
+        )
+        assertTrue(group.missing.isEmpty())
+    }
+
+    @Test
+    fun `rar padded new style missing part keeps padding`() {
+        val parts = listOf(
+            ArchivePart("archive.part01.rar", byteArrayOf(1)),
+            ArchivePart("archive.part03.rar", byteArrayOf(3)),
+        )
+
+        val group = ArchiveExtractor.splitGroup("archive.part01.rar", parts)
+
+        assertNotNull(group)
+        assertEquals(listOf("archive.part02.rar"), group!!.missing)
+    }
+
+    @Test
+    fun `single rar is not a split group`() {
+        assertNull(
+            ArchiveExtractor.splitGroup(
+                "archive.rar",
+                listOf(ArchivePart("archive.rar", ByteArray(1))),
+            ),
+        )
+        assertNull(
+            ArchiveExtractor.splitGroup(
+                "archive.part1.rar",
+                listOf(ArchivePart("archive.part1.rar", ByteArray(1))),
+            ),
+        )
     }
 
     private fun expectedPayload(): ByteArray = ByteArray(200_000) { (it * 7).toByte() }

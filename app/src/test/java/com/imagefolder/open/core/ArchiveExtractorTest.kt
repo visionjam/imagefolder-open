@@ -148,12 +148,9 @@ class ArchiveExtractorTest {
     }
 
     @Test
-    fun `rar is detected but unsupported`() {
+    fun `rar is detected`() {
         val data = "Rar!\u001A\u0007\u0000".toByteArray(StandardCharsets.ISO_8859_1)
         assertEquals(ArchiveFormat.RAR, ArchiveExtractor.detect("test.rar", data))
-        assertThrows(ArchiveUnsupportedException::class.java) {
-            ArchiveExtractor.extract(data, "test.rar", null, temp.newFolder("rar-tmp"))
-        }
     }
 
     @Test
