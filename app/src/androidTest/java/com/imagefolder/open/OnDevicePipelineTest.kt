@@ -121,6 +121,17 @@ class OnDevicePipelineTest {
     }
 
     @Test
+    fun greenApplePlaceholderRendersOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bytes = ImageProcessor.renderHiddenImage(null, null)
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        assertNotNull("green apple placeholder should decode", bitmap)
+        assertEquals(512, requireNotNull(bitmap).width)
+        assertEquals(512, bitmap.height)
+        java.io.File(context.cacheDir, "green-apple-placeholder.png").writeBytes(bytes)
+    }
+
+    @Test
     fun archiveExtractionWorksOnDevice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val zip = java.io.ByteArrayOutputStream().also { out ->

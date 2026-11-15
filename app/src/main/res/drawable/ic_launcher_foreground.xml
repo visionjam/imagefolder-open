@@ -4,16 +4,47 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Leaf -->
+    <path
+        android:fillColor="#558B2F"
+        android:pathData="M55,32 C60,22 72,18 82,22 C78,32 66,38 55,32 Z"
+        android:strokeColor="#1B5E20"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M57,31 C65,28 73,25 80,23"
+        android:strokeColor="#1B5E20"
+        android:strokeLineCap="round"
+        android:strokeWidth="1" />
+
+    <!-- Stem -->
+    <path
+        android:fillColor="#795548"
+        android:pathData="M51,20 L57,20 L57,40 L51,40 Z" />
+
+    <!-- Apple body -->
     <path
         android:fillColor="#2E7D32"
-        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+        android:pathData="M54,29 C70.016,29 83,41.984 83,58 C83,74.016 70.016,87 54,87 C37.984,87 25,74.016 25,58 C25,41.984 37.984,29 54,29 Z"
+        android:strokeColor="#1B5E20"
+        android:strokeWidth="2" />
+
+    <!-- White document outline and lines -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M32,38h44a5,5 0 0 1 5,5v28a5,5 0 0 1 -5,5h-44a5,5 0 0 1 -5,-5v-28a5,5 0 0 1 5,-5z" />
+        android:pathData="M40.2,74.5 L67.8,74.5 L67.8,41.5 L45.7,41.5 L40.2,46.8 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2.8" />
     <path
-        android:fillColor="#81C784"
-        android:pathData="M31,67l13,-15l11,12l7,-8l15,16z" />
+        android:pathData="M45.7,52.4 L62.3,52.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8" />
     <path
-        android:fillColor="#FFB300"
-        android:pathData="M68,51m-5,0a5,5 0 1 1,10 0a5,5 0 1 1,-10 0" />
+        android:pathData="M45.7,59.4 L62.3,59.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8" />
+    <path
+        android:pathData="M45.7,66.2 L62.3,66.2"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8" />
 </vector>

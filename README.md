@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.5.0** · [Changelog](CHANGELOG.md)
+> Current version: **v0.5.1** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
@@ -17,7 +17,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 ## Features
 
 - **Pack**: choose an optional cover image, add any number of files, and write a note
-  - Generates a placeholder image when no cover is selected
+  - Generates a green apple placeholder cover when no cover is selected
   - Draws the note in the top-right corner
   - Output format follows the cover: PNG / JPEG / WebP are preserved; HEIC/AVIF and other containers are converted to PNG
   - Output names follow the original style: `Tank_20261115_123456.png` / `.jpg` / `.webp`
@@ -107,7 +107,7 @@ Unit tests cover:
 - Path traversal and malicious ZIP protection
 - Corrupt data and invalid input
 
-Currently **45 JVM unit tests + 5 on-device tests**.
+Currently **45 JVM unit tests + 6 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 
