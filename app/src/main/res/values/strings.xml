@@ -128,6 +128,10 @@
     <string name="language_chinese">简体中文</string>
     <string name="language_english">English</string>
     <string name="about_section_settings">设置</string>
+    <string name="about_section_privacy">隐私与信任</string>
+    <string name="about_privacy_local">所有打包和解密都在本机完成，不上传任何文件。</string>
+    <string name="about_privacy_network">应用没有网络权限，不收集统计或崩溃数据；「检查更新」只是用浏览器打开 GitHub。</string>
+    <string name="about_privacy_open">代码以 GPL-3.0 开源，数据格式有公开文档。加密保护内容，但不隐藏「这张图里有数据」这一事实。</string>
     <string name="about_section_tools">实用功能</string>
     <string name="about_section_tech">技术信息</string>
     <string name="about_section_about">关于</string>

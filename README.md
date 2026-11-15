@@ -50,6 +50,15 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 PNG output without advanced features still writes the original per-file `tpWj` chunks, so basic usage is fully interoperable; advanced features use the v0.2 `IFB2` envelope. JPEG/WebP carriers use private segments/chunks in their containers and can only be read by this app.
 
+## Privacy
+
+- **No network permission.** The app does not request `INTERNET`; there are no analytics, accounts, or cloud services.
+- **All local.** Packing, extraction and decryption run entirely on the device. Nothing is uploaded.
+- **What encryption protects.** An encrypted bundle hides the payload contents and inner file names. It does **not** hide the fact that the image contains hidden data, the entry count, or the carrier image itself.
+- **Transit risk.** Chat and social apps may recompress images or strip unknown chunks/segments. Send the image as a file when possible; the recipient needs this app to extract it.
+- **Password loss is unrecoverable.** Passwords are never stored.
+- See [SECURITY.md](SECURITY.md) for the threat model and [docs/FORMAT.md](docs/FORMAT.md) for the on-disk format.
+
 ## Data format
 
 All three carriers share the same `JSON header + 0x00 + raw bytes` payload:
