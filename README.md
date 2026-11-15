@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.8.0** · [Changelog](CHANGELOG.md)
+> Current version: **v0.9.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
