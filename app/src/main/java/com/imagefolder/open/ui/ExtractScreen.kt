@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -28,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Unarchive
@@ -38,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -45,6 +49,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -55,12 +61,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.imagefolder.open.ExtractItem
 import com.imagefolder.open.ExtractUiState
 import com.imagefolder.open.MainViewModel
@@ -83,6 +92,19 @@ fun ExtractScreen(
     }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) viewModel.exportToFolder(uri)
+    }
+    val scanPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.scanFolder(uri)
+    }
+    val allFilesAccess by viewModel.allFilesAccess.collectAsState()
+    var showBrowser by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshAllFilesAccess()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
@@ -126,6 +148,155 @@ fun ExtractScreen(
             Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.pick_extract))
+        }
+
+        OutlinedButton(
+            onClick = {
+                if (allFilesAccess) {
+                    showBrowser = true
+                } else {
+                    scanPicker.launch(null)
+                }
+            },
+            enabled = !state.scanning,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.scan_folder))
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (allFilesAccess) {
+                Text(
+                    text = stringResource(R.string.all_files_granted),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                TextButton(onClick = { scanPicker.launch(null) }) {
+                    Text(stringResource(R.string.use_system_picker))
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.all_files_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.all_files_grant))
+                }
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.all_files_android_11),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (state.scanning) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(
+                        R.string.scanning_progress,
+                        state.scanScanned,
+                        state.scanTotal,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (state.scanTotal > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.scanScanned.toFloat() / state.scanTotal },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(onClick = viewModel::cancelScan) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        } else if (state.scanHits.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.scan_results, state.scanHits.size),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OutlinedButton(
+                onClick = viewModel::addScanHitsToExtract,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.scan_add_all))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.scanHits.forEach { hit ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PhotoLibrary,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = hit.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = buildString {
+                                        append(hit.format.name)
+                                        append(" · ")
+                                        append(
+                                            stringResource(
+                                                R.string.scan_entries,
+                                                hit.entries,
+                                            ),
+                                        )
+                                        if (hit.encrypted) {
+                                            append(" · ")
+                                            append(stringResource(R.string.scan_encrypted))
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (state.scanError != null) {
+            Text(
+                text = state.scanError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else if (state.scanCompleted && state.scanHits.isEmpty()) {
+            Text(
+                text = stringResource(R.string.scan_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Button(
@@ -203,6 +374,16 @@ fun ExtractScreen(
 
     previewItem?.let { item ->
         PreviewDialog(item = item, onDismiss = { previewItem = null })
+    }
+
+    if (showBrowser) {
+        FolderBrowserDialog(
+            onDismiss = { showBrowser = false },
+            onSelect = { directory ->
+                showBrowser = false
+                viewModel.scanDirectory(directory)
+            },
+        )
     }
 
     if (state.needsPassword) {

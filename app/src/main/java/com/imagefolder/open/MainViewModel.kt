@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,16 +28,22 @@ import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
 import com.imagefolder.open.core.PngChunkCodec
+import com.imagefolder.open.data.FolderBudgetExceededException
 import com.imagefolder.open.data.FolderExporter
 import com.imagefolder.open.data.FolderReader
+import com.imagefolder.open.data.FolderScanner
 import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
+import com.imagefolder.open.data.ScanHit
 import com.imagefolder.open.data.ShareClassifier
 import com.imagefolder.open.data.SharePlan
 import com.imagefolder.open.data.SharedFile
 import com.imagefolder.open.data.UriUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +54,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+const val MAX_PACK_MB = 64
+const val MAX_PACK_BYTES = MAX_PACK_MB * 1024L * 1024
+
+class PayloadTooLargeException : Exception()
 
 enum class ThemeMode {
     SYSTEM,
@@ -105,6 +118,12 @@ data class ExtractUiState(
     val unpackingIndex: Int? = null,
     val unpackPasswordIndex: Int? = null,
     val unpackPasswordError: Boolean = false,
+    val scanning: Boolean = false,
+    val scanScanned: Int = 0,
+    val scanTotal: Int = 0,
+    val scanHits: List<ScanHit> = emptyList(),
+    val scanCompleted: Boolean = false,
+    val scanError: String? = null,
 )
 
 data class PendingShare(
@@ -123,6 +142,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _extract = MutableStateFlow(ExtractUiState())
     val extract: StateFlow<ExtractUiState> = _extract.asStateFlow()
+
+    private var scanJob: Job? = null
+
+    @Volatile
+    private var scanGeneration = 0
+
+    private val _allFilesAccess = MutableStateFlow(hasAllFilesAccess())
+    val allFilesAccess: StateFlow<Boolean> = _allFilesAccess.asStateFlow()
 
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
@@ -503,11 +530,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             mime = carrier.mime,
                         )
                     } else if (!advanced) {
-                        val hidden = state.payloads.map { picked ->
-                            HiddenFile(
+                        val hidden = mutableListOf<HiddenFile>()
+                        var simpleBytes = 0L
+                        for (picked in state.payloads) {
+                            val bytes = readPayloadWithinBudget(
+                                app,
+                                picked,
+                                MAX_PACK_BYTES - simpleBytes,
+                            )
+                            simpleBytes += bytes.size
+                            hidden += HiddenFile(
                                 name = picked.name,
                                 mime = picked.mime ?: UriUtils.guessMime(picked.name),
-                                bytes = UriUtils.readBytes(app, picked.uri),
+                                bytes = bytes,
                             )
                         }
                         GeneratedResult(
@@ -550,6 +585,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (outcome.failedFiles > 0) {
                     showMessage(app.getString(R.string.msg_some_files_failed, outcome.failedFiles))
                 }
+            } catch (e: PayloadTooLargeException) {
+                _pack.update { it.copy(generating = false) }
+                showMessage(app.getString(R.string.msg_payload_too_large, MAX_PACK_MB))
+            } catch (e: FolderBudgetExceededException) {
+                _pack.update { it.copy(generating = false) }
+                showMessage(app.getString(R.string.msg_payload_too_large, MAX_PACK_MB))
             } catch (t: Throwable) {
                 _pack.update { it.copy(generating = false) }
                 showMessage(app.getString(R.string.msg_generate_failed, t.message ?: t.javaClass.simpleName))
@@ -578,6 +619,140 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearResult() {
         _pack.update { it.copy(result = null) }
+    }
+
+    fun refreshAllFilesAccess() {
+        _allFilesAccess.value = hasAllFilesAccess()
+    }
+
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+
+    fun scanFolder(uri: Uri) {
+        val app = getApplication<Application>()
+        startScan { report, continueScan ->
+            runCatching {
+                app.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            FolderScanner.scan(app, uri, report, continueScan)
+        }
+    }
+
+    fun scanDirectory(root: File) {
+        if (!_allFilesAccess.value) {
+            showMessage(getApplication<Application>().getString(R.string.msg_all_files_required))
+            return
+        }
+        startScan { report, continueScan ->
+            FolderScanner.scanDirectory(root, report, continueScan)
+        }
+    }
+
+    private fun startScan(
+        scan: suspend (
+            report: (scanned: Int, total: Int) -> Unit,
+            continueScan: () -> Boolean,
+        ) -> List<ScanHit>,
+    ) {
+        scanJob?.cancel()
+        val generation = ++scanGeneration
+        scanJob = viewModelScope.launch {
+            val app = getApplication<Application>()
+            _extract.update {
+                it.copy(
+                    scanning = true,
+                    scanScanned = 0,
+                    scanTotal = 0,
+                    scanHits = emptyList(),
+                    scanCompleted = false,
+                    scanError = null,
+                )
+            }
+            try {
+                val hits = withContext(Dispatchers.IO) {
+                    scan(
+                        { scanned, total ->
+                            if (generation == scanGeneration) {
+                                _extract.update { state ->
+                                    state.copy(scanScanned = scanned, scanTotal = total)
+                                }
+                            }
+                        },
+                        { generation == scanGeneration && isActive },
+                    )
+                }
+                if (generation == scanGeneration) {
+                    _extract.update {
+                        it.copy(
+                            scanning = false,
+                            scanHits = hits,
+                            scanScanned = it.scanTotal,
+                            scanCompleted = true,
+                            scanError = null,
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation == scanGeneration) {
+                    _extract.update {
+                        it.copy(
+                            scanning = false,
+                            scanCompleted = false,
+                            scanError = app.getString(
+                                R.string.msg_scan_failed,
+                                e.message ?: e.javaClass.simpleName,
+                            ),
+                        )
+                    }
+                }
+            } finally {
+                if (generation == scanGeneration && _extract.value.scanning) {
+                    _extract.update { it.copy(scanning = false) }
+                }
+            }
+        }
+    }
+
+    fun cancelScan() {
+        scanGeneration++
+        scanJob?.cancel()
+        scanJob = null
+        _extract.update {
+            it.copy(
+                scanning = false,
+                scanCompleted = false,
+                scanError = null,
+            )
+        }
+    }
+
+    fun addScanHitsToExtract() {
+        val hits = _extract.value.scanHits
+        if (hits.isEmpty()) return
+        val files = hits.map { hit ->
+            PickedFile(
+                uri = hit.uri,
+                name = hit.name,
+                size = hit.size,
+                mime = UriUtils.guessMime(hit.name),
+            )
+        }
+        resetExtractForNewSources(files)
+        _extract.update {
+            it.copy(
+                scanHits = emptyList(),
+                scanCompleted = false,
+                scanTotal = 0,
+                scanScanned = 0,
+                scanError = null,
+            )
+        }
+        showMessage(getApplication<Application>().getString(R.string.msg_scan_added, files.size))
     }
 
     fun setExtractSources(uris: List<Uri>) {
@@ -917,22 +1092,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val entries = mutableListOf<BundleEntry>()
         val usedPaths = mutableSetOf<String>()
         var failed = 0
+        var totalBytes = 0L
+
+        fun addEntries(newEntries: List<BundleEntry>) {
+            for (entry in newEntries) {
+                totalBytes += entry.bytes.size
+                if (totalBytes > MAX_PACK_BYTES) {
+                    throw PayloadTooLargeException()
+                }
+                entries += entry
+            }
+        }
+
         for (folder in folders) {
-            val scan = FolderReader.collect(app, folder, usedPaths)
-            entries += scan.entries
+            val scan = FolderReader.collect(
+                app,
+                folder,
+                usedPaths,
+                MAX_PACK_BYTES - totalBytes,
+            )
+            addEntries(scan.entries)
             failed += scan.failedFiles
         }
         for (file in payloads) {
-            val bytes = runCatching { UriUtils.readBytes(app, file.uri) }.getOrNull()
-            if (bytes == null) {
+            val bytes = try {
+                readPayloadWithinBudget(app, file, MAX_PACK_BYTES - totalBytes)
+            } catch (e: PayloadTooLargeException) {
+                throw e
+            } catch (e: Exception) {
                 failed++
                 continue
             }
             val name = BundlePaths.sanitizeSegment(file.name)
             val path = BundlePaths.uniqueFilePath(name, usedPaths)
-            entries += BundleEntry(path, bytes)
+            addEntries(listOf(BundleEntry(path, bytes)))
         }
         return entries to failed
+    }
+
+    private fun readPayloadWithinBudget(
+        app: Application,
+        file: PickedFile,
+        remaining: Long,
+    ): ByteArray {
+        if (remaining <= 0) throw PayloadTooLargeException()
+        if (file.size > 0) {
+            if (file.size > remaining) throw PayloadTooLargeException()
+            return UriUtils.readBytes(app, file.uri)
+        }
+        return UriUtils.readAtMost(
+            app,
+            file.uri,
+            remaining.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+        ) ?: throw PayloadTooLargeException()
     }
 
     private sealed interface ScanOutcome {

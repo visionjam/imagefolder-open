@@ -355,6 +355,10 @@ private fun PrivacyCard() {
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
+                text = stringResource(R.string.about_privacy_storage),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
                 text = stringResource(R.string.about_privacy_open),
                 style = MaterialTheme.typography.bodySmall,
             )

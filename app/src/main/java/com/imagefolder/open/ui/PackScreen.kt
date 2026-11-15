@@ -62,6 +62,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.imagefolder.open.MAX_PACK_BYTES
+import com.imagefolder.open.MAX_PACK_MB
 import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.PackUiState
 import com.imagefolder.open.R
@@ -314,6 +316,23 @@ fun PackScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        val knownBytes = state.payloads.sumOf { maxOf(0L, it.size) }
+        if (state.payloads.isNotEmpty() || state.folders.isNotEmpty()) {
+            Text(
+                text = stringResource(
+                    R.string.pack_size_hint,
+                    formatSize(knownBytes),
+                    MAX_PACK_MB,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (knownBytes > MAX_PACK_BYTES) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
 
         Button(
             onClick = viewModel::generate,
