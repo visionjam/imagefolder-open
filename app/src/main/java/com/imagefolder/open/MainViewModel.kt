@@ -46,6 +46,12 @@ enum class ThemeMode {
     DARK,
 }
 
+enum class LanguageMode {
+    SYSTEM,
+    CHINESE,
+    ENGLISH,
+}
+
 data class GeneratedResult(
     val fileName: String,
     val bytes: ByteArray,
@@ -116,6 +122,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    private val _languageMode = MutableStateFlow(
+        runCatching {
+            LanguageMode.valueOf(
+                prefs.getString(KEY_LANGUAGE_MODE, LanguageMode.SYSTEM.name)
+                    ?: LanguageMode.SYSTEM.name,
+            )
+        }.getOrDefault(LanguageMode.SYSTEM),
+    )
+    val languageMode: StateFlow<LanguageMode> = _languageMode.asStateFlow()
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -135,6 +151,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    fun setLanguageMode(mode: LanguageMode) {
+        _languageMode.value = mode
+        prefs.edit().putString(KEY_LANGUAGE_MODE, mode.name).apply()
     }
 
     fun setCover(uri: Uri?) {
@@ -757,5 +778,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val PREFS_NAME = "settings"
         const val KEY_COMPAT_MODE = "compat_mode"
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_LANGUAGE_MODE = "language_mode"
     }
 }

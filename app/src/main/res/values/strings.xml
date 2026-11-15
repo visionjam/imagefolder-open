@@ -109,6 +109,10 @@
     <string name="theme_system">跟随系统</string>
     <string name="theme_light">浅色</string>
     <string name="theme_dark">深色</string>
+    <string name="language_title">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
     <string name="about_compat_title">兼容模式</string>
     <string name="about_compat_summary">开启后，添加文件时只允许从相册单选一张图片（用于老系统或选择器异常的设备）。</string>
     <string name="about_disclaimer_title">免责声明</string>

@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.imagefolder.open.LanguageMode
 import com.imagefolder.open.R
 import com.imagefolder.open.ThemeMode
 
@@ -35,6 +36,8 @@ fun AboutScreen(
     onCompatModeChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    languageMode: LanguageMode,
+    onLanguageModeChange: (LanguageMode) -> Unit,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -103,6 +106,22 @@ fun AboutScreen(
             }
         }
 
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.language_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LanguageMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = languageMode == mode,
+                        onClick = { onLanguageModeChange(mode) },
+                        label = { Text(stringResource(mode.labelRes())) },
+                    )
+                }
+            }
+        }
+
         HorizontalDivider()
 
         InfoSection(
@@ -159,6 +178,12 @@ private fun ThemeMode.labelRes(): Int = when (this) {
     ThemeMode.SYSTEM -> R.string.theme_system
     ThemeMode.LIGHT -> R.string.theme_light
     ThemeMode.DARK -> R.string.theme_dark
+}
+
+private fun LanguageMode.labelRes(): Int = when (this) {
+    LanguageMode.SYSTEM -> R.string.language_system
+    LanguageMode.CHINESE -> R.string.language_chinese
+    LanguageMode.ENGLISH -> R.string.language_english
 }
 
 @Composable

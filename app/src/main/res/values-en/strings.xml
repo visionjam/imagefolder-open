@@ -109,6 +109,10 @@
     <string name="theme_system">Follow system</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="language_title">Language</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
     <string name="about_compat_title">Compatibility mode</string>
     <string name="about_compat_summary">When enabled, adding files is limited to picking a single image from the gallery (for older systems or picker issues).</string>
     <string name="about_disclaimer_title">Disclaimer</string>

@@ -40,6 +40,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val extractState by viewModel.extract.collectAsState()
     val compatMode by viewModel.compatMode.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val languageMode by viewModel.languageMode.collectAsState()
     val message by viewModel.message.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,6 +96,8 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
                     onCompatModeChange = viewModel::setCompatMode,
                     themeMode = themeMode,
                     onThemeModeChange = viewModel::setThemeMode,
+                    languageMode = languageMode,
+                    onLanguageModeChange = viewModel::setLanguageMode,
                 )
             }
         }

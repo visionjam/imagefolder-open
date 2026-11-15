@@ -4,25 +4,28 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imagefolder.open.ui.ImageFolderApp
 import com.imagefolder.open.ui.theme.ImageFolderTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -35,6 +38,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot(viewModel: MainViewModel = viewModel()) {
     val themeMode by viewModel.themeMode.collectAsState()
+    val languageMode by viewModel.languageMode.collectAsState()
+
+    LaunchedEffect(languageMode) {
+        val locales = when (languageMode) {
+            LanguageMode.SYSTEM -> LocaleListCompat.getEmptyLocaleList()
+            LanguageMode.CHINESE -> LocaleListCompat.forLanguageTags("zh-CN")
+            LanguageMode.ENGLISH -> LocaleListCompat.forLanguageTags("en")
+        }
+        if (AppCompatDelegate.getApplicationLocales() != locales) {
+            AppCompatDelegate.setApplicationLocales(locales)
+        }
+    }
+
     val darkTheme = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
