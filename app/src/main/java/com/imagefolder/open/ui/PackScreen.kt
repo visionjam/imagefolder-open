@@ -116,9 +116,10 @@ fun PackScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val cover = state.cover
+                @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
                 val coverBitmap by produceState<Bitmap?>(null, cover?.uri) {
                     val uri = cover?.uri
-                    value = if (uri == null) {
+                    val loaded = if (uri == null) {
                         null
                     } else {
                         withContext(Dispatchers.IO) {
@@ -127,6 +128,7 @@ fun PackScreen(
                             }.getOrNull()
                         }
                     }
+                    value = loaded
                 }
 
                 Box(

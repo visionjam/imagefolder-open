@@ -19,6 +19,8 @@ import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
 import com.imagefolder.open.core.BundleFormatException
 import com.imagefolder.open.core.BundlePaths
+import com.imagefolder.open.core.CarrierCodec
+import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
@@ -60,6 +62,7 @@ data class GeneratedResult(
     val bundle: Boolean = false,
     val entryCount: Int = 0,
     val failedFiles: Int = 0,
+    val mime: String = "image/png",
 )
 
 data class PackUiState(
@@ -272,27 +275,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val outcome = withContext(Dispatchers.IO) {
+                    val carrier = state.cover
+                        ?.let { ImageProcessor.detectCarrier(app, it.uri) }
+                        ?: CarrierFormat.PNG
                     val cover = state.cover?.let { ImageProcessor.loadCover(app, it.uri) }
-                    val coverPng = ImageProcessor.renderHiddenImage(cover, state.note)
+                    val coverBytes = ImageProcessor.renderHiddenImage(cover, state.note, carrier)
                     val fileName = "Tank_" +
-                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".png"
+                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) +
+                        "." + carrier.extension
                     val advanced = state.folders.isNotEmpty() || state.encrypt || state.compress
 
-                    if (!advanced) {
-                        val hidden = state.payloads.map { picked ->
-                            HiddenFile(
-                                name = picked.name,
-                                mime = picked.mime ?: UriUtils.guessMime(picked.name),
-                                bytes = UriUtils.readBytes(app, picked.uri),
-                            )
-                        }
-                        GeneratedResult(
-                            fileName = fileName,
-                            bytes = PngChunkCodec.insertFiles(coverPng, hidden),
-                            bundle = false,
-                            entryCount = hidden.size,
-                        )
-                    } else {
+                    if (carrier != CarrierFormat.PNG) {
                         val (entries, failed) = buildEntries(app, state.folders, state.payloads)
                         if (entries.isEmpty()) {
                             throw IllegalStateException("没有可打包的内容")
@@ -302,8 +295,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             compress = state.compress,
                             password = if (state.encrypt) state.password else null,
                         )
-                        val bytes = PngChunkCodec.insertBundle(
-                            coverPng = coverPng,
+                        val bytes = CarrierCodec.insertBundle(
+                            coverBytes = coverBytes,
+                            format = carrier,
                             name = "图片文件夹.zip",
                             mime = "application/zip",
                             envelope = envelope,
@@ -317,6 +311,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             bundle = true,
                             entryCount = entries.size,
                             failedFiles = failed,
+                            mime = carrier.mime,
+                        )
+                    } else if (!advanced) {
+                        val hidden = state.payloads.map { picked ->
+                            HiddenFile(
+                                name = picked.name,
+                                mime = picked.mime ?: UriUtils.guessMime(picked.name),
+                                bytes = UriUtils.readBytes(app, picked.uri),
+                            )
+                        }
+                        GeneratedResult(
+                            fileName = fileName,
+                            bytes = PngChunkCodec.insertFiles(coverBytes, hidden),
+                            bundle = false,
+                            entryCount = hidden.size,
+                            mime = carrier.mime,
+                        )
+                    } else {
+                        val (entries, failed) = buildEntries(app, state.folders, state.payloads)
+                        if (entries.isEmpty()) {
+                            throw IllegalStateException("没有可打包的内容")
+                        }
+                        val envelope = BundleCodec.pack(
+                            entries = entries,
+                            compress = state.compress,
+                            password = if (state.encrypt) state.password else null,
+                        )
+                        val bytes = PngChunkCodec.insertBundle(
+                            coverPng = coverBytes,
+                            name = "图片文件夹.zip",
+                            mime = "application/zip",
+                            envelope = envelope,
+                            encrypted = state.encrypt,
+                            compressed = state.compress,
+                            entryCount = entries.size,
+                        )
+                        GeneratedResult(
+                            fileName = fileName,
+                            bytes = bytes,
+                            bundle = true,
+                            entryCount = entries.size,
+                            failedFiles = failed,
+                            mime = carrier.mime,
                         )
                     }
                 }
@@ -338,7 +375,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val app = getApplication<Application>()
             try {
                 val saved = withContext(Dispatchers.IO) {
-                    gallerySaver.save(result.bytes, result.fileName, "image/png")
+                    gallerySaver.save(result.bytes, result.fileName, result.mime)
                 }
                 _pack.update { state ->
                     state.copy(result = state.result?.copy(saved = true, savedLocation = saved.location))
@@ -718,8 +755,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         var failedBundles = 0
         for (source in sources) {
             val bytes = runCatching { UriUtils.readBytes(app, source.uri) }.getOrNull() ?: continue
-            if (!PngChunkCodec.isPng(bytes)) continue
-            val hiddenItems = runCatching { PngChunkCodec.extractItems(bytes) }
+            val hiddenItems = runCatching { CarrierCodec.extractItems(bytes) }
                 .getOrDefault(emptyList())
             for (item in hiddenItems) {
                 if (item.format == "ifv2") {

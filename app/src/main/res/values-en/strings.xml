@@ -8,7 +8,7 @@
 
     <string name="pack_title">Pack</string>
     <string name="cover_section">Cover image (optional)</string>
-    <string name="cover_hint">The image that carries the payload. If omitted, a placeholder image is generated.</string>
+    <string name="cover_hint">The image that carries the payload. Output keeps its format (PNG/JPEG/WebP). If omitted, a PNG placeholder is generated.</string>
     <string name="pick_cover">Choose cover</string>
     <string name="clear">Clear</string>
 
@@ -34,7 +34,7 @@
     <string name="password_required">Enter a password</string>
     <string name="show_password">Show password</string>
     <string name="hide_password">Hide password</string>
-    <string name="advanced_hint">Compression, encryption or folders use the new format and require this app to extract. With all disabled, output stays compatible with the original app.</string>
+    <string name="advanced_hint">Compression, encryption, folders or JPEG/WebP covers use the new format and require this app to extract. PNG output with all options disabled stays compatible with the original app.</string>
 
     <string name="note_label">Note (optional)</string>
     <string name="note_hint">Drawn in the top-right corner</string>
@@ -44,7 +44,7 @@
 
     <string name="extract_title">Extract</string>
     <string name="extract_section">Extract from images</string>
-    <string name="extract_hint">Select PNG images created by Image Folder. Multiple selection supported.</string>
+    <string name="extract_hint">Select PNG, JPEG or WebP images created by Image Folder. Multiple selection supported.</string>
     <string name="pick_extract">Choose image folders (multiple)</string>
     <string name="extract_button">Extract</string>
     <string name="extract_empty">No images selected</string>
@@ -102,8 +102,9 @@
     <string name="generated_title">Generated image</string>
     <string name="generated_saved">Saved to %1$s</string>
 
-    <string name="about_version">Version %1$s</string>
-    <string name="about_description">An open-source tool that hides any file inside a PNG image. Supports ZIP compression, AES-256-GCM encryption, directory structure, and unpacking ZIP/7z/TAR/GZ/BZ2/XZ. Basic output remains fully compatible with the original Image Folder app.</string>
+    <string name="about_version_with_code">Version %1$s (%2$d)</string>
+    <string name="about_tagline">An open-source tool for hiding files inside images</string>
+    <string name="about_description">Supports PNG, JPEG and WebP carriers, ZIP compression, AES-256-GCM encryption and directory structures. PNG output without advanced features remains fully compatible with the original Image Folder tpWj format.</string>
     <string name="about_archives">ZIP, 7z, TAR, GZ, BZ2 and XZ files in extraction results can be unpacked in-app (ZIP/7z passwords and split ZIP/7z are supported). RAR is not supported.</string>
     <string name="theme_title">Theme</string>
     <string name="theme_system">Follow system</string>
@@ -113,19 +114,35 @@
     <string name="language_system">Follow system</string>
     <string name="language_chinese">简体中文</string>
     <string name="language_english">English</string>
+    <string name="about_section_settings">Settings</string>
+    <string name="about_section_tools">Tools</string>
+    <string name="about_section_tech">Technical details</string>
+    <string name="about_section_about">About</string>
     <string name="about_compat_title">Compatibility mode</string>
     <string name="about_compat_summary">When enabled, adding files is limited to picking a single image from the gallery (for older systems or picker issues).</string>
+    <string name="about_check_update_title">Check for updates</string>
+    <string name="about_check_update_summary">Open the latest release on GitHub</string>
+    <string name="about_copy_version_title">Copy version info</string>
+    <string name="about_copy_version_summary">Version, Android version and device model</string>
+    <string name="about_copy_version_done">Version info copied</string>
+    <string name="about_licenses_title">Open-source licenses</string>
+    <string name="about_licenses_summary">App and third-party components</string>
+    <string name="about_licenses_dialog_title">Open-source licenses</string>
+    <string name="about_licenses_body">This app: GNU GPL v3.0\n\nAndroidX, Jetpack Compose, Kotlin: Apache License 2.0\n\nApache Commons Compress / IO / Lang / Codec, zip4j, kotlinx.coroutines, kotlinx.serialization: Apache License 2.0\n\nXZ for Java: Public Domain\n\nFull license texts are available in the repository LICENSE file and the respective dependency repositories.</string>
+    <string name="about_licenses_close">Close</string>
     <string name="about_disclaimer_title">Disclaimer</string>
     <string name="about_disclaimer">This app is for technical research and personal backup only. Do not use it to distribute illegal content or infringe others\' rights. You are responsible for your actions.</string>
     <string name="about_open_source_title">About this project</string>
     <string name="about_open_source">An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it is not affiliated with the original author. UI built with Material Design 3 and licensed under GPL-3.0.</string>
     <string name="about_license">License: GNU GPL v3.0</string>
-    <string name="about_project_title">Project</string>
     <string name="about_project_url">https://github.com/visionjam/imagefolder-open</string>
-    <string name="about_bundle_title">v0.2 format</string>
+    <string name="about_project_open">Open on GitHub</string>
     <string name="about_archives_title">Archive support</string>
     <string name="about_format_title">Data format</string>
-    <string name="about_format">Base data is stored in the private PNG chunk tpWj: JSON header + 0x00 + data, with CRC32 per the PNG spec. v0.2 ZIP/encrypted payloads use an IFB2 envelope in the same chunk.</string>
-    <string name="about_bundle_format">Added in v0.2: ZIP directory structure, compression and AES-256-GCM encryption. Images using these features require this app to extract; otherwise they remain interoperable with the original.</string>
-    <string name="about_tank_note">Default output name follows the original style: Tank_timestamp.png</string>
+    <string name="about_format">PNG stores a private tpWj chunk (JSON header + 0x00 + data, CRC32 per the PNG spec); JPEG uses APP15 segments; WebP uses a private RIFF chunk named IFBW. Compressed or encrypted payloads use the IFB2 envelope.</string>
+    <string name="about_carrier_title">Carrier formats</string>
+    <string name="about_carrier">Output follows the cover image: PNG, JPEG and WebP are preserved; HEIC/AVIF and other containers are converted to PNG. JPEG/WebP carriers require this app; the original v1.1 only reads PNG.</string>
+    <string name="about_tank_note">Output names follow the original style: Tank_timestamp.png / .jpg / .webp</string>
+    <string name="about_expand">Expand</string>
+    <string name="about_collapse">Collapse</string>
 </resources>

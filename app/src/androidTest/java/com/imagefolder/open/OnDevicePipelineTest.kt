@@ -12,6 +12,8 @@ import com.imagefolder.open.core.ArchiveFormat
 import com.imagefolder.open.core.ArchivePart
 import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
+import com.imagefolder.open.core.CarrierCodec
+import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
@@ -85,6 +87,48 @@ class OnDevicePipelineTest {
         } finally {
             context.contentResolver.delete(savedCover.uri, null, null)
         }
+    }
+
+    @Test
+    fun jpegAndWebpCarriersRenderOnDevice() {
+        val cover = Bitmap.createBitmap(320, 200, Bitmap.Config.ARGB_8888).also { bitmap ->
+            Canvas(bitmap).drawColor(Color.rgb(46, 125, 50))
+        }
+        val envelope = ByteArray(1024) { (it * 5).toByte() }
+
+        for (format in listOf(CarrierFormat.JPEG, CarrierFormat.WEBP)) {
+            val coverBytes = ImageProcessor.renderHiddenImage(cover, "载体测试", format)
+            assertNotNull("$format cover should decode", BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size))
+
+            val covered = CarrierCodec.insertBundle(
+                coverBytes = coverBytes,
+                format = format,
+                name = "bundle.zip",
+                mime = "application/zip",
+                envelope = envelope,
+                encrypted = false,
+                compressed = false,
+                entryCount = 1,
+            )
+            val rendered = BitmapFactory.decodeByteArray(covered, 0, covered.size)
+            assertNotNull("$format carrier should still render", rendered)
+            assertEquals(320, requireNotNull(rendered).width)
+
+            val items = CarrierCodec.extractItems(covered)
+            assertEquals("$format items", 1, items.size)
+            assertArrayEquals(envelope, items[0].bytes)
+        }
+    }
+
+    @Test
+    fun greenApplePlaceholderRendersOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bytes = ImageProcessor.renderHiddenImage(null, null)
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        assertNotNull("green apple placeholder should decode", bitmap)
+        assertEquals(512, requireNotNull(bitmap).width)
+        assertEquals(512, bitmap.height)
+        java.io.File(context.cacheDir, "green-apple-placeholder.png").writeBytes(bytes)
     }
 
     @Test

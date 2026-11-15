@@ -28,6 +28,8 @@ versionName = "0.3.0"
 
 产物：`app/build/outputs/apk/release/app-release-unsigned.apk`
 
+release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outputs/mapping/release/mapping.txt` 一并归档，便于解析线上崩溃堆栈。
+
 ## 4. 签名
 
 发布密钥**不要提交到仓库**，请离线备份。丢失后将无法发布同签名更新。
