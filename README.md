@@ -1,10 +1,12 @@
-# 图片文件夹
+# Image Folder
 
-把任意文件藏进 PNG / JPEG / WebP 图片的 Android 工具。界面使用 **Jetpack Compose + Material Design 3** 实现，兼容原版「图片文件夹」的数据格式。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-> 本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现。代码与素材全部重写，不包含原应用的任何代码或资源。
+An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is built with **Jetpack Compose + Material Design 3** and remains compatible with the data format of the original "Image Folder" app.
+
+> An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> 当前版本：**v0.5.0** · [更新日志](CHANGELOG.md)
+> Current version: **v0.5.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
@@ -12,153 +14,153 @@
   <img src="docs/screenshots/screen-about.png" width="32%" />
 </p>
 
-## 功能
+## Features
 
-- **打包**：选择可选的表图（载体图片）、添加任意多个文件、可写一段备注
-  - 不选表图时自动生成一张示意图
-  - 备注会绘制在图片右上角
-  - 输出格式跟随表图：PNG / JPEG / WebP 原样保留，HEIC/AVIF 等转为 PNG
-  - 输出文件名沿用原版风格：`Tank_20261115_123456.png` / `.jpg` / `.webp`
-- **文件夹**：通过系统目录选择器添加整个文件夹，保留目录结构与空目录
-- **压缩**：ZIP Deflate 压缩，减小载荷体积
-- **加密**：AES-256-GCM + PBKDF2-HMAC-SHA256（150,000 次），提取时需要密码
-- **提取**：多选 PNG / JPEG / WebP 图片，自动识别其中的隐藏内容
-  - 图片可直接预览
-  - 单个保存或全部保存到相册
-  - 非图片文件保存后可调用系统应用打开
-  - 按目录结构「导出到文件夹」
-- **解压**：提取结果中的压缩包可直接解压
-  - ZIP（ZipCrypto / AES 密码）、7z（密码）
-  - TAR、GZ、BZ2、XZ（含 `.tar.gz` / `.tar.bz2` / `.tar.xz`）
-  - 分卷 ZIP（`.z01`… + `.zip` 或 `.zip.001`…）与分卷 7z（`.7z.001`…）
-  - 保留目录结构；嵌套压缩包可继续解压；缺少分卷时列出缺失文件
-  - RAR 暂不支持
-- **多语言与主题**：语言可跟随系统或手动选择简体中文 / English；主题同样支持跟随系统 / 浅色 / 深色
-- **兼容模式**：仅从相册单选一张图片，适配选择器异常的设备
-- **Material 3**：动态取色、深色模式、Edge-to-Edge
+- **Pack**: choose an optional cover image, add any number of files, and write a note
+  - Generates a placeholder image when no cover is selected
+  - Draws the note in the top-right corner
+  - Output format follows the cover: PNG / JPEG / WebP are preserved; HEIC/AVIF and other containers are converted to PNG
+  - Output names follow the original style: `Tank_20261115_123456.png` / `.jpg` / `.webp`
+- **Folders**: add whole directories through the system picker; directory structure and empty folders are preserved
+- **Compression**: ZIP Deflate to reduce payload size
+- **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (150,000 iterations); a password is required for extraction
+- **Extract**: select multiple PNG / JPEG / WebP images and automatically detect hidden content
+  - Preview images directly
+  - Save one item or all items to the gallery
+  - Open non-image files after saving
+  - Export to a folder while preserving the directory structure
+- **Unpack**: archives in extraction results can be unpacked in-app
+  - ZIP (ZipCrypto / AES passwords), 7z (password)
+  - TAR, GZ, BZ2, XZ (including `.tar.gz` / `.tar.bz2` / `.tar.xz`)
+  - Split ZIP (`.z01`… + `.zip` or `.zip.001`…) and split 7z (`.7z.001`…)
+  - Preserves directory structure; nested archives can be unpacked recursively; missing split parts are listed
+  - RAR is not supported
+- **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
+- **Compatibility mode**: pick a single image from the gallery for devices with picker issues
+- **Material 3**: dynamic color, dark mode, edge-to-edge
 
-### 格式兼容性
+### Format compatibility
 
-| 载体 / 打包方式 | 本应用 | 原版「图片文件夹」v1.1 |
+| Carrier / mode | This app | Original Image Folder v1.1 |
 | --- | --- | --- |
-| PNG，不压缩、不加密、无文件夹 | ✅ | ✅ 可提取 |
-| PNG，压缩 / 加密 / 含文件夹 | ✅ | ❌ 只能看到一个 `.zip` 数据块 |
-| JPEG（任意模式） | ✅ | ❌ 不识别 |
-| WebP（任意模式） | ✅ | ❌ 不识别 |
+| PNG, no compression / encryption / folders | ✅ | ✅ extractable |
+| PNG, compressed / encrypted / with folders | ✅ | ❌ only sees a `.zip` payload |
+| JPEG (any mode) | ✅ | ❌ not recognized |
+| WebP (any mode) | ✅ | ❌ not recognized |
 
-PNG 未启用高级特性时仍写入原版的逐个 `tpWj` chunk，因此基础用法完全互通；高级特性使用 v0.2 的 `IFB2` 封装。JPEG / WebP 载体使用各自容器中的私有段/块，只有本应用能读取。
+PNG output without advanced features still writes the original per-file `tpWj` chunks, so basic usage is fully interoperable; advanced features use the v0.2 `IFB2` envelope. JPEG/WebP carriers use private segments/chunks in their containers and can only be read by this app.
 
-## 数据格式
+## Data format
 
-三种载体共用同一份 `JSON 头 + 0x00 + 原始字节` 载荷：
+All three carriers share the same `JSON header + 0x00 + raw bytes` payload:
 
-- **PNG**：写入私有 ancillary chunk（4 字符名称 `tpWj`），位置在第一个 `IDAT` 之前
-- **JPEG**：写入 APP15（`0xFFEF`）段，插入在第一个 SOS 之前；超过 64KB 时自动拆分为多个段
-- **WebP**：写入私有 RIFF chunk `IFBW`，追加在图像数据之后
+- **PNG**: private ancillary chunk (`tpWj`), inserted before the first `IDAT`
+- **JPEG**: APP15 (`0xFFEF`) segments inserted before the first SOS; payloads larger than 64KB are split automatically
+- **WebP**: private RIFF chunk `IFBW`, appended after the image chunks
 
 ```
-PNG 签名
+PNG signature
 IHDR
-tpWj  <- 文件 1：{"name":"文件名","mime":"类型"} 0x00 <原始字节>
-tpWj  <- 文件 2：...
+tpWj  <- file 1: {"name":"file name","mime":"type"} 0x00 <raw bytes>
+tpWj  <- file 2: ...
 IDAT
 IEND
 ```
 
-v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [docs/FORMAT.md](docs/FORMAT.md)。压缩包解压支持见 [docs/ARCHIVES.md](docs/ARCHIVES.md)。
+v0.2 ZIP / encrypted payloads use the `IFB2` envelope in the same payload. See [docs/FORMAT.md](docs/FORMAT.md) for details and [docs/ARCHIVES.md](docs/ARCHIVES.md) for archive support.
 
-- PNG chunk 长度与 CRC32 按 PNG 规范使用大端序；JPEG/WebP 的分段长度分别使用大端/小端序
-- 普通看图软件会忽略未知 chunk / APP15 段，图片仍可正常显示
+- PNG chunk lengths and CRC32 are big-endian per the PNG spec; JPEG segment lengths are big-endian and WebP chunk lengths are little-endian
+- Regular image viewers ignore unknown chunks / APP15 segments, so the image still renders normally
 
-## 下载
+## Download
 
-从 [Releases](https://github.com/visionjam/imagefolder-open/releases) 下载最新签名的 APK。
+Download the latest signed APK from [Releases](https://github.com/visionjam/imagefolder-open/releases).
 
-## 构建
+## Build
 
-要求：
+Requirements:
 
-- JDK 17 或更高
-- Android SDK Platform 35、Build-Tools 35.0.0
+- JDK 17 or newer
+- Android SDK Platform 35, Build-Tools 35.0.0
 
 ```bash
 ./gradlew assembleDebug
-./gradlew assembleRelease   # R8 + 资源收缩，当前产物约 3MB
+./gradlew assembleRelease   # R8 + resource shrinking, ~3 MB output
 ```
 
-仓库的 `settings.gradle.kts` 已优先配置阿里云 Maven 镜像，Gradle wrapper 默认使用腾讯云镜像（见 `gradle/wrapper/gradle-wrapper.properties`），国内网络可直接构建。海外网络可自行调整仓库顺序或换回 Gradle 官方下载地址。
+The repository's `settings.gradle.kts` prefers Aliyun Maven mirrors, and the Gradle wrapper uses a Tencent Cloud mirror by default (see `gradle/wrapper/gradle-wrapper.properties`), so builds work from mainland China. Outside China, adjust the repository order or switch back to the official Gradle distribution URL.
 
-## 测试
+## Tests
 
 ```bash
 ./gradlew testDebugUnitTest
 ```
 
-单元测试覆盖：
+Unit tests cover:
 
-- `tpWj` chunk 编解码往返与 PNG 结构 / CRC 校验
-- 读取原版布局与 Python 参考实现生成的互操作样张
-- JPEG APP15 分段写入/提取、超过 64KB 的自动拆分
-- WebP RIFF chunk 写入/提取、奇数长度 chunk 与填充
-- ZIP 目录结构、压缩与空目录保留
-- AES-256-GCM 加解密、错误密码、随机盐/nonce
-- 路径穿越与恶意 ZIP 防护
-- 损坏数据与非法输入
+- `tpWj` chunk round-trips and PNG structure / CRC validation
+- Reading the original layout and interoperability fixtures from the Python reference implementation
+- JPEG APP15 segment write / extract and automatic splitting above 64KB
+- WebP RIFF chunk write / extract, odd-sized chunks and padding
+- ZIP directory structure, compression and empty-folder preservation
+- AES-256-GCM encryption / decryption, wrong passwords, random salt / nonce
+- Path traversal and malicious ZIP protection
+- Corrupt data and invalid input
 
-当前共 **45 个 JVM 单元测试 + 5 个真机用例**。
+Currently **45 JVM unit tests + 5 on-device tests**.
 
-真机端到端测试（需要连接设备）：
+On-device end-to-end tests (requires a connected device):
 
 ```bash
 ./gradlew connectedDebugAndroidTest
 ```
 
-发版流程见 [docs/RELEASING.md](docs/RELEASING.md)。
+See [docs/RELEASING.md](docs/RELEASING.md) for the release process.
 
-## 项目结构
+## Project layout
 
 ```
 app/src/main/java/com/imagefolder/open/
-├── core/PngChunkCodec.kt      # tpWj chunk 读写（PNG 载体）
-├── core/JpegCarrierCodec.kt   # APP15 分段读写（JPEG 载体）
-├── core/WebpCarrierCodec.kt   # IFBW chunk 读写（WebP 载体）
-├── core/CarrierCodec.kt       # 载体检测与统一入口
-├── core/HiddenPayloadCodec.kt # 共享 JSON 头 + 数据载荷
-├── core/BundleCodec.kt        # ZIP + AES-256-GCM 封装
-├── core/BundlePaths.kt        # 安全、唯一的归档路径
-├── core/ArchiveExtractor.kt   # ZIP/7z/TAR/GZ/BZ2/XZ 解压
-├── core/ImageProcessor.kt     # 封面解码、备注绘制、PNG/JPEG/WebP 编码
-├── data/FolderReader.kt       # SAF 目录枚举、结构保留
-├── data/FolderExporter.kt     # 按目录结构导出
-├── data/GallerySaver.kt       # MediaStore 保存
-├── data/UriUtils.kt           # 内容 URI 读取
-├── MainViewModel.kt           # 状态与业务编排
-└── ui/                        # Compose Material 3 界面
+├── core/PngChunkCodec.kt      # tpWj chunk I/O (PNG carrier)
+├── core/JpegCarrierCodec.kt   # APP15 segment I/O (JPEG carrier)
+├── core/WebpCarrierCodec.kt   # IFBW chunk I/O (WebP carrier)
+├── core/CarrierCodec.kt       # carrier detection and dispatch
+├── core/HiddenPayloadCodec.kt # shared JSON header + payload
+├── core/BundleCodec.kt        # ZIP + AES-256-GCM envelope
+├── core/BundlePaths.kt        # safe, unique archive paths
+├── core/ArchiveExtractor.kt   # ZIP/7z/TAR/GZ/BZ2/XZ extraction
+├── core/ImageProcessor.kt     # cover decoding, note drawing, PNG/JPEG/WebP encoding
+├── data/FolderReader.kt       # SAF directory traversal, structure preservation
+├── data/FolderExporter.kt     # export with directory structure
+├── data/GallerySaver.kt       # MediaStore saving
+├── data/UriUtils.kt           # content URI reading
+├── MainViewModel.kt           # state and business orchestration
+└── ui/                        # Compose Material 3 UI
 ```
 
-## 已知限制
+## Known limitations
 
-- 需要 Android 10（API 29）及以上
-- 打包时会把载荷文件完整读入内存，超大文件（数百 MB）可能导致内存不足
-- JPEG / WebP 载体按质量 95 重新编码（会丢失原图 EXIF 等元数据）；PNG 载体无损
-- JPEG / WebP 载体只有本应用能提取，原版「图片文件夹」v1.1 只识别 PNG
-- 加密密码不会保存，丢失后无法恢复
-- RAR、RAR 分卷、ISO / CAB / DEB / RPM、ZSTD 暂不支持
-- 分卷必须全部出现在当前提取结果中（同一批图片/加密包），不会自动在设备上搜索缺失分卷
-- 图片型载荷保存到 `Pictures/图片文件夹`，其他类型保存到 `Download/图片文件夹`；完整目录结构请用「导出到文件夹」
-- 从 Release 版切换到 debug 版（或反之）需要先卸载，因为签名不同
+- Requires Android 10 (API 29) or newer
+- Payload files are read fully into memory while packing; very large files (hundreds of MB) may cause out-of-memory errors
+- JPEG / WebP carriers are re-encoded at quality 95 (EXIF and other metadata are dropped); PNG output is lossless
+- JPEG / WebP carriers can only be extracted by this app; the original Image Folder v1.1 only reads PNG
+- Passwords are not stored; a lost password cannot be recovered
+- RAR, split RAR, ISO / CAB / DEB / RPM and ZSTD are not supported
+- Split archives must all be present in the current extraction results (same batch of images / envelopes); missing parts are not searched on the device
+- Image payloads are saved to `Pictures/图片文件夹`; other files go to `Download/图片文件夹`. Use "Export to folder" for the full directory structure
+- Switching between Release and debug builds requires an uninstall because the signatures differ
 
-## 免责声明
+## Disclaimer
 
-本应用仅供技术研究与个人备份使用。请勿用于传播违法内容或侵犯他人权益，使用者的行为及后果由使用者自行承担。
+This app is intended for technical research and personal backup only. Do not use it to distribute illegal content or infringe the rights of others. You are responsible for your actions and their consequences.
 
-## 致谢
+## Acknowledgements
 
-- 解压格式与库选型参考了 [ZipXtract](https://github.com/WirelessAlien/ZipXtract)（GPL-3.0）
-- 使用 Apache Commons Compress、XZ for Java（公共领域）、Zip4j 等开源库
+- Archive format and library choices were informed by [ZipXtract](https://github.com/WirelessAlien/ZipXtract) (GPL-3.0)
+- Uses Apache Commons Compress, XZ for Java (public domain), Zip4j and other open-source libraries
 
 ## License
 
 Copyright (C) 2026 Vision Jam
 
-本项目采用 **GNU General Public License v3.0**，详见 [LICENSE](LICENSE)。
+This project is licensed under the **GNU General Public License v3.0**; see [LICENSE](LICENSE).
