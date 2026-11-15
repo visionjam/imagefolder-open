@@ -4,6 +4,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Build a single ABI with -Pabi=arm64-v8a (or armeabi-v7a); default packages both.
+val requestedAbi = providers.gradleProperty("abi").orNull
+val packagedAbis = when (requestedAbi) {
+    "arm64-v8a", "armeabi-v7a" -> listOf(requestedAbi!!)
+    else -> listOf("arm64-v8a", "armeabi-v7a")
+}
+
 android {
     namespace = "com.imagefolder.open"
     compileSdk = 35
@@ -20,7 +27,7 @@ android {
         resourceConfigurations += listOf("zh", "en")
         // libarchive ships four ABIs; release devices are ARM. Add x86/x86_64 back
         // if you need an emulator build.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        ndk { abiFilters += packagedAbis }
     }
 
     buildTypes {

@@ -23,10 +23,12 @@ versionName = "0.3.0"
 ## 3. 构建 release
 
 ```bash
-./gradlew assembleRelease
+./gradlew assembleRelease                  # arm64-v8a + armeabi-v7a
+./gradlew assembleRelease -Pabi=arm64-v8a  # 只打 64 位 ARM（产物更小）
 ```
 
-产物：`app/build/outputs/apk/release/app-release-unsigned.apk`
+产物：`app/build/outputs/apk/release/app-release-unsigned.apk`。
+单 ABI 构建的 APK 命名请带上 ABI，例如 `imagefolder-open-vX.Y.Z-arm64-v8a.apk`。
 
 release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outputs/mapping/release/mapping.txt` 一并归档，便于解析线上崩溃堆栈。
 
@@ -46,7 +48,7 @@ $BT/apksigner sign \
   --ks-pass "pass:$KEYSTORE_PASSWORD" \
   --key-pass "pass:$KEYSTORE_PASSWORD" \
   --ks-key-alias "$KEY_ALIAS" \
-  --out dist/imagefolder-open-vX.Y.Z.apk \
+  --out dist/imagefolder-open-vX.Y.Z-arm64-v8a.apk \
   dist/app-release-aligned.apk
 
 $BT/apksigner verify --print-certs dist/imagefolder-open-vX.Y.Z.apk
