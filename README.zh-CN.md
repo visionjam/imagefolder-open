@@ -6,7 +6,7 @@
 
 > 本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现。代码与素材全部重写，不包含原应用的任何代码或资源。
 >
-> 当前版本：**v0.5.1** · [更新日志](CHANGELOG.md)
+> 当前版本：**v0.6.0** · [更新日志](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
