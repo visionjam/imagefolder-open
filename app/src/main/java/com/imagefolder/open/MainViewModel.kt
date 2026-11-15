@@ -145,12 +145,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private val _shareWarningSeen = MutableStateFlow(prefs.getBoolean(KEY_SHARE_WARNING_SEEN, false))
+    val shareWarningSeen: StateFlow<Boolean> = _shareWarningSeen.asStateFlow()
+
     fun showMessage(text: String) {
         _message.value = text
     }
 
     fun clearMessage() {
         _message.value = null
+    }
+
+    fun markShareWarningSeen() {
+        _shareWarningSeen.value = true
+        prefs.edit().putBoolean(KEY_SHARE_WARNING_SEEN, true).apply()
     }
 
     private val _activeTab = MutableStateFlow(0)
@@ -923,5 +931,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val KEY_COMPAT_MODE = "compat_mode"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LANGUAGE_MODE = "language_mode"
+        const val KEY_SHARE_WARNING_SEEN = "share_warning_seen"
     }
 }

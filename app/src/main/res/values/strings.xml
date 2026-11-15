@@ -104,6 +104,12 @@
     <string name="share_choice_message">有 %1$d 张图片包含隐藏文件。要提取这些内容，还是把它们作为载荷重新打包？</string>
     <string name="share_extract_action">提取隐藏内容</string>
     <string name="share_pack_action">作为载荷打包</string>
+    <string name="share_action">分享</string>
+    <string name="share_warning_title">分享前提示</string>
+    <string name="share_warning_message">聊天或社交平台可能重新压缩图片，导致隐藏数据丢失。建议以「文件」形式发送。接收方需要安装本应用才能提取。</string>
+    <string name="share_warning_dont_ask">不再提示</string>
+    <string name="share_continue">继续分享</string>
+    <string name="msg_share_failed">分享失败：%1$s</string>
     <string name="generated_entries">包含 %1$d 个条目</string>
 
     <string name="generated_title">生成结果</string>

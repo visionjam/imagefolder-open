@@ -104,6 +104,12 @@
     <string name="share_choice_message">%1$d images contain hidden files. Extract them, or pack everything as a payload?</string>
     <string name="share_extract_action">Extract hidden content</string>
     <string name="share_pack_action">Pack as payload</string>
+    <string name="share_action">Share</string>
+    <string name="share_warning_title">Before you share</string>
+    <string name="share_warning_message">Chat and social apps may recompress images and strip the hidden data. Send it as a file when possible. The recipient needs this app to extract it.</string>
+    <string name="share_warning_dont_ask">Don\'t show again</string>
+    <string name="share_continue">Share anyway</string>
+    <string name="msg_share_failed">Share failed: %1$s</string>
     <string name="generated_entries">%1$d entries</string>
 
     <string name="generated_title">Generated image</string>

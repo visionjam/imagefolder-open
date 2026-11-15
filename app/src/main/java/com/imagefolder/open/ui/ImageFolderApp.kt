@@ -44,6 +44,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val message by viewModel.message.collectAsState()
     val activeTab by viewModel.activeTab.collectAsState()
     val pendingShare by viewModel.pendingShare.collectAsState()
+    val shareWarningSeen by viewModel.shareWarningSeen.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -69,6 +70,8 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
             onSave = viewModel::saveResult,
             onBack = viewModel::clearResult,
             snackbarHostState = snackbarHostState,
+            shareWarningSeen = shareWarningSeen,
+            onShareWarningSeen = viewModel::markShareWarningSeen,
         )
         return
     }

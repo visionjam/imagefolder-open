@@ -18,6 +18,7 @@ import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
 import com.imagefolder.open.data.GallerySaver
+import com.imagefolder.open.ui.writeShareCache
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.model.ZipParameters
 import net.lingala.zip4j.model.enums.CompressionMethod
@@ -223,6 +224,24 @@ class OnDevicePipelineTest {
         } finally {
             context.contentResolver.delete(saved.uri, null, null)
         }
+    }
+
+    @Test
+    fun shareCacheWritesTheGeneratedBytes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bytes = "share me".toByteArray(StandardCharsets.UTF_8)
+        val uri = writeShareCache(context, bytes, "share-test.png")
+        val file = java.io.File(requireNotNull(context.cacheDir), "shared/share-test.png")
+        assertTrue(file.exists())
+        assertEquals(
+            uri,
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            ),
+        )
+        assertArrayEquals(bytes, file.readBytes())
     }
 
     @Test
