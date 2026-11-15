@@ -61,6 +61,12 @@
 
     <string name="save">保存</string>
     <string name="save_all">全部保存</string>
+    <string name="unpack">解压</string>
+    <string name="unpacking">正在解压…</string>
+    <string name="msg_unpacked">已解压 %1$d 个文件</string>
+    <string name="msg_unpack_failed">解压失败：%1$s</string>
+    <string name="msg_unpack_unsupported">暂不支持 %1$s 格式</string>
+    <string name="archive_password_message">这个压缩包已加密，请输入密码。</string>
     <string name="open">打开</string>
     <string name="preview">预览</string>
     <string name="done">完成</string>
@@ -96,7 +102,8 @@
     <string name="generated_saved">已保存到 %1$s</string>
 
     <string name="about_version">版本 %1$s</string>
-    <string name="about_description">把任意文件藏进 PNG 图片的开源工具。支持 ZIP 压缩、AES-256-GCM 加密与目录结构保留；未启用高级特性时仍与原版「图片文件夹」的 tpWj 格式完全兼容。</string>
+    <string name="about_description">把任意文件藏进 PNG 图片的开源工具。支持 ZIP 压缩、AES-256-GCM 加密、目录结构保留，并可解压 ZIP/7z/TAR/GZ/BZ2/XZ；未启用高级特性时仍与原版「图片文件夹」的 tpWj 格式完全兼容。</string>
+    <string name="about_archives">提取结果中的 ZIP、7z、TAR、GZ、BZ2、XZ 可直接在应用内解压（ZIP/7z 支持密码）。RAR 暂不支持。</string>
     <string name="about_compat_title">兼容模式</string>
     <string name="about_compat_summary">开启后，添加文件时只允许从相册单选一张图片（用于老系统或选择器异常的设备）。</string>
     <string name="about_disclaimer_title">免责声明</string>
@@ -107,6 +114,7 @@
     <string name="about_project_title">项目地址</string>
     <string name="about_project_url">https://github.com/visionjam/imagefolder-open</string>
     <string name="about_bundle_title">v0.2 新格式</string>
+    <string name="about_archives_title">解压支持</string>
     <string name="about_format_title">数据格式</string>
     <string name="about_format">基础数据写入 PNG 私有数据块 tpWj：JSON 头 + 0x00 + 数据，CRC32 遵循 PNG 规范。v0.2 的 ZIP / 加密内容使用 IFB2 封装写入同一个数据块。</string>
     <string name="about_bundle_format">v0.2 新增：ZIP 目录结构、压缩与 AES-256-GCM 加密。启用这些特性生成的图片需要本应用提取；未启用时保持与原版互通。</string>

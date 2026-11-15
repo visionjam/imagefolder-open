@@ -7,6 +7,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.imagefolder.open.core.ArchiveExtractor
+import com.imagefolder.open.core.ArchiveFormat
 import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
 import com.imagefolder.open.core.HiddenFile
@@ -78,6 +80,27 @@ class OnDevicePipelineTest {
         } finally {
             context.contentResolver.delete(savedCover.uri, null, null)
         }
+    }
+
+    @Test
+    fun archiveExtractionWorksOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val zip = java.io.ByteArrayOutputStream().also { out ->
+            java.util.zip.ZipOutputStream(out).use { stream ->
+                stream.putNextEntry(java.util.zip.ZipEntry("目录/说明.txt"))
+                stream.write("设备端 zip".toByteArray(StandardCharsets.UTF_8))
+                stream.closeEntry()
+            }
+        }.toByteArray()
+
+        val result = ArchiveExtractor.extract(zip, "ondevice.zip", null, context.cacheDir)
+        assertEquals(ArchiveFormat.ZIP, result.format)
+        assertEquals(1, result.entries.size)
+        assertEquals("目录/说明.txt", result.entries.single().path)
+        assertArrayEquals(
+            "设备端 zip".toByteArray(StandardCharsets.UTF_8),
+            result.entries.single().bytes,
+        )
     }
 
     @Test

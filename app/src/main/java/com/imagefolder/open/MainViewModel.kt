@@ -6,6 +6,13 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.imagefolder.open.core.ArchiveEntry
+import com.imagefolder.open.core.ArchiveExtractor
+import com.imagefolder.open.core.ArchiveFormat
+import com.imagefolder.open.core.ArchiveFormatException
+import com.imagefolder.open.core.ArchivePasswordRequiredException
+import com.imagefolder.open.core.ArchiveUnsupportedException
+import com.imagefolder.open.core.ArchiveWrongPasswordException
 import com.imagefolder.open.core.BundleCodec
 import com.imagefolder.open.core.BundleEntry
 import com.imagefolder.open.core.BundleFormatException
@@ -62,6 +69,7 @@ data class ExtractItem(
     val sourceName: String,
     val isDirectory: Boolean = false,
     val savedUri: Uri? = null,
+    val archiveFormat: ArchiveFormat? = null,
 )
 
 data class ExtractUiState(
@@ -72,6 +80,9 @@ data class ExtractUiState(
     val needsPassword: Boolean = false,
     val passwordError: Boolean = false,
     val exporting: Boolean = false,
+    val unpackingIndex: Int? = null,
+    val unpackPasswordIndex: Int? = null,
+    val unpackPasswordError: Boolean = false,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -314,6 +325,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     hasExtracted = false,
                     needsPassword = false,
                     passwordError = false,
+                    unpackingIndex = null,
+                    unpackPasswordIndex = null,
+                    unpackPasswordError = false,
                 )
             }
         }
@@ -474,6 +488,132 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun unpackArchive(index: Int, password: String? = null) {
+        val state = _extract.value
+        val item = state.results.getOrNull(index) ?: return
+        val app = getApplication<Application>()
+        if (item.isDirectory) return
+        val format = item.archiveFormat
+        if (format == null) {
+            showMessage(app.getString(R.string.msg_unpack_failed, "不是压缩包"))
+            return
+        }
+        if (!ArchiveExtractor.isSupported(format)) {
+            showMessage(app.getString(R.string.msg_unpack_unsupported, format.label))
+            return
+        }
+        if (state.unpackingIndex != null) return
+
+        _extract.update {
+            it.copy(
+                unpackingIndex = index,
+                unpackPasswordIndex = null,
+                unpackPasswordError = false,
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    ArchiveExtractor.extract(item.bytes, item.name, password, app.cacheDir)
+                }
+                val additions = buildUnpackedItems(item, result.entries)
+                _extract.update { current ->
+                    current.copy(
+                        results = current.results + additions,
+                        unpackingIndex = null,
+                        unpackPasswordIndex = null,
+                        unpackPasswordError = false,
+                    )
+                }
+                showMessage(
+                    app.getString(
+                        R.string.msg_unpacked,
+                        result.entries.count { !it.path.endsWith("/") },
+                    ),
+                )
+            } catch (e: ArchivePasswordRequiredException) {
+                _extract.update {
+                    it.copy(
+                        unpackingIndex = null,
+                        unpackPasswordIndex = index,
+                        unpackPasswordError = false,
+                    )
+                }
+            } catch (e: ArchiveWrongPasswordException) {
+                _extract.update {
+                    it.copy(
+                        unpackingIndex = null,
+                        unpackPasswordIndex = index,
+                        unpackPasswordError = true,
+                    )
+                }
+            } catch (e: ArchiveUnsupportedException) {
+                _extract.update { it.copy(unpackingIndex = null) }
+                showMessage(e.message ?: app.getString(R.string.msg_unpack_unsupported, format.label))
+            } catch (e: ArchiveFormatException) {
+                _extract.update { it.copy(unpackingIndex = null) }
+                showMessage(app.getString(R.string.msg_unpack_failed, e.message ?: ""))
+            } catch (t: Throwable) {
+                _extract.update { it.copy(unpackingIndex = null) }
+                showMessage(app.getString(R.string.msg_unpack_failed, t.message ?: t.javaClass.simpleName))
+            }
+        }
+    }
+
+    fun unpackWithPassword(password: String) {
+        val index = _extract.value.unpackPasswordIndex ?: return
+        _extract.update { it.copy(unpackPasswordIndex = null, unpackPasswordError = false) }
+        unpackArchive(index, password)
+    }
+
+    fun cancelUnpackPassword() {
+        _extract.update { it.copy(unpackPasswordIndex = null, unpackPasswordError = false) }
+    }
+
+    private fun buildUnpackedItems(
+        item: ExtractItem,
+        entries: List<ArchiveEntry>,
+    ): List<ExtractItem> {
+        val used = _extract.value.results.mapTo(mutableSetOf()) { it.relativePath }
+        val baseName = item.name.substringBeforeLast('.', item.name).ifEmpty { "解压" }
+        val prefix = BundlePaths.uniqueDirectoryPath(
+            BundlePaths.sanitizeSegment(baseName) + "/",
+            used,
+        )
+        val output = mutableListOf<ExtractItem>()
+        output += ExtractItem(
+            name = prefix.dropLast(1),
+            relativePath = prefix,
+            mime = null,
+            bytes = ByteArray(0),
+            sourceName = item.sourceName,
+            isDirectory = true,
+        )
+        for (entry in entries) {
+            val isDirectory = entry.path.endsWith("/")
+            val leaf = entry.path.trimEnd('/').substringAfterLast('/').ifEmpty { "文件夹" }
+            output += ExtractItem(
+                name = leaf,
+                relativePath = prefix + entry.path,
+                mime = if (isDirectory) {
+                    null
+                } else {
+                    UriUtils.guessMime(leaf) ?: "application/octet-stream"
+                },
+                bytes = entry.bytes,
+                sourceName = item.sourceName,
+                isDirectory = isDirectory,
+                archiveFormat = if (isDirectory) {
+                    null
+                } else {
+                    ArchiveExtractor.detect(leaf, entry.bytes)
+                        .takeIf { it != ArchiveFormat.UNKNOWN }
+                },
+            )
+        }
+        return output
+    }
+
     private fun buildEntries(
         app: Application,
         folders: List<PickedFolder>,
@@ -547,6 +687,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             bytes = entry.bytes,
                             sourceName = source.name,
                             isDirectory = isDirectory,
+                            archiveFormat = if (isDirectory) {
+                                null
+                            } else {
+                                ArchiveExtractor.detect(fileName, entry.bytes)
+                                    .takeIf { it != ArchiveFormat.UNKNOWN }
+                            },
                         )
                     }
                 } else {
@@ -556,6 +702,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         mime = item.mime,
                         bytes = item.bytes,
                         sourceName = source.name,
+                        archiveFormat = ArchiveExtractor.detect(item.name, item.bytes)
+                            .takeIf { it != ArchiveFormat.UNKNOWN },
                     )
                 }
             }

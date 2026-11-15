@@ -94,6 +94,10 @@ fun AboutScreen(
             body = stringResource(R.string.about_bundle_format),
         )
         InfoSection(
+            title = stringResource(R.string.about_archives_title),
+            body = stringResource(R.string.about_archives),
+        )
+        InfoSection(
             title = stringResource(R.string.about_open_source_title),
             body = stringResource(R.string.about_open_source),
         )

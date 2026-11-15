@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -186,9 +188,11 @@ fun ExtractScreen(
                 state.results.forEachIndexed { index, item ->
                     ExtractedRow(
                         item = item,
+                        unpacking = state.unpackingIndex == index,
                         onPreview = { previewItem = item },
                         onSave = { viewModel.saveExtracted(index) },
                         onOpen = { openFile(context, item) },
+                        onUnpack = { viewModel.unpackArchive(index) },
                     )
                 }
             }
@@ -204,18 +208,31 @@ fun ExtractScreen(
     if (state.needsPassword) {
         PasswordPromptDialog(
             passwordError = state.passwordError,
+            message = stringResource(R.string.password_dialog_message),
             onConfirm = viewModel::extractWithPassword,
             onDismiss = viewModel::cancelPasswordPrompt,
         )
     }
+
+    if (state.unpackPasswordIndex != null) {
+        PasswordPromptDialog(
+            passwordError = state.unpackPasswordError,
+            message = stringResource(R.string.archive_password_message),
+            onConfirm = viewModel::unpackWithPassword,
+            onDismiss = viewModel::cancelUnpackPassword,
+        )
+    }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExtractedRow(
     item: ExtractItem,
+    unpacking: Boolean,
     onPreview: () -> Unit,
     onSave: () -> Unit,
     onOpen: () -> Unit,
+    onUnpack: () -> Unit,
 ) {
     val image = !item.isDirectory && isImageMime(item.mime, item.name)
     Surface(
@@ -257,17 +274,21 @@ private fun ExtractedRow(
                     )
                 }
                 if (!item.isDirectory) {
+                    val sizeLabel = buildString {
+                        append(formatSize(item.bytes.size.toLong()))
+                        item.archiveFormat?.let { append(" · ").append(it.label) }
+                    }
                     Text(
-                        text = formatSize(item.bytes.size.toLong()),
+                        text = sizeLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.Center,
             ) {
                 if (item.isDirectory) {
                     Text(
@@ -295,6 +316,20 @@ private fun ExtractedRow(
                         )
                         TextButton(onClick = onOpen) {
                             Text(stringResource(R.string.open))
+                        }
+                    }
+                    if (item.archiveFormat != null) {
+                        if (unpacking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            TextButton(onClick = onUnpack) {
+                                Text(stringResource(R.string.unpack))
+                            }
                         }
                     }
                 }
@@ -353,6 +388,7 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
 @Composable
 private fun PasswordPromptDialog(
     passwordError: Boolean,
+    message: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -364,7 +400,7 @@ private fun PasswordPromptDialog(
         title = { Text(stringResource(R.string.password_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.password_dialog_message))
+                Text(message)
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
