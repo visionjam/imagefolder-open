@@ -55,7 +55,7 @@
     <string name="all_files_grant">去授权全部文件访问</string>
     <string name="all_files_granted">全部文件访问已授权</string>
     <string name="all_files_android_11">「全部文件访问」需要 Android 11 及以上。</string>
-    <string name="browse_folders">浏览全部文件</string>
+    <string name="use_system_picker">使用系统选择器</string>
     <string name="choose_folder">选择文件夹</string>
     <string name="folder_up">上一级</string>
     <string name="folder_select">选择此文件夹</string>

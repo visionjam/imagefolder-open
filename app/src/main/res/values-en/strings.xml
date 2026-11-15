@@ -55,7 +55,7 @@
     <string name="all_files_grant">Grant All files access</string>
     <string name="all_files_granted">All files access granted</string>
     <string name="all_files_android_11">All files access requires Android 11 or newer.</string>
-    <string name="browse_folders">Browse all files</string>
+    <string name="use_system_picker">Use system picker</string>
     <string name="choose_folder">Choose a folder</string>
     <string name="folder_up">Up one level</string>
     <string name="folder_select">Select this folder</string>

@@ -151,7 +151,13 @@ fun ExtractScreen(
         }
 
         OutlinedButton(
-            onClick = { scanPicker.launch(null) },
+            onClick = {
+                if (allFilesAccess) {
+                    showBrowser = true
+                } else {
+                    scanPicker.launch(null)
+                }
+            },
             enabled = !state.scanning,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -167,13 +173,8 @@ fun ExtractScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                OutlinedButton(
-                    onClick = { showBrowser = true },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.browse_folders))
+                TextButton(onClick = { scanPicker.launch(null) }) {
+                    Text(stringResource(R.string.use_system_picker))
                 }
             } else {
                 Text(
