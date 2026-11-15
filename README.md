@@ -6,6 +6,12 @@
 >
 > 当前版本：**v0.2.0**
 
+<p align="center">
+  <img src="docs/screenshots/screen-pack.png" width="32%" />
+  <img src="docs/screenshots/screen-extract.png" width="32%" />
+  <img src="docs/screenshots/screen-about.png" width="32%" />
+</p>
+
 ## 功能
 
 - **打包**：选择可选的表图（载体图片）、添加任意多个文件、可写一段备注
