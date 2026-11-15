@@ -76,12 +76,14 @@ fun GeneratedImageScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
             val bitmap by produceState<Bitmap?>(null, result.bytes) {
-                value = withContext(Dispatchers.IO) {
+                val loaded = withContext(Dispatchers.IO) {
                     runCatching {
                         BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)
                     }.getOrNull()
                 }
+                value = loaded
             }
 
             Card(modifier = Modifier.fillMaxWidth()) {

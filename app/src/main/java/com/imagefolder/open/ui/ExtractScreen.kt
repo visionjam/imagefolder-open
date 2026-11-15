@@ -349,12 +349,14 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
                 val bitmap by produceState<Bitmap?>(null, item.bytes) {
-                    value = withContext(Dispatchers.IO) {
+                    val loaded = withContext(Dispatchers.IO) {
                         runCatching {
                             BitmapFactory.decodeByteArray(item.bytes, 0, item.bytes.size)
                         }.getOrNull()
                     }
+                    value = loaded
                 }
                 Text(
                     text = item.name,

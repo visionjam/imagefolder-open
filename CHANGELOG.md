@@ -1,5 +1,39 @@
 # 更新日志
 
+## v0.5.0 — 2026-11-15
+
+### 新增
+
+- **JPEG 载体**：隐藏内容写入 APP15 段，插入在第一个 SOS 之前；超过 64KB 自动拆分
+- **WebP 载体**：隐藏内容写入私有 RIFF chunk `IFBW`，追加在图像数据之后
+- 输出格式跟随表图：PNG / JPEG / WebP 原样保留，HEIC/AVIF 等转为 PNG
+- 提取支持自动识别 PNG / JPEG / WebP 三种载体
+- **关于页重构**：应用信息卡、分组设置、可折叠技术信息
+- 关于页实用功能：检查更新（GitHub Releases）、复制版本信息、开源许可列表
+
+### 变更
+
+- release 构建开启 R8 代码压缩与资源收缩，APK 从约 44MB 降至约 3MB
+- 移除未使用的图标与依赖代码（`material-icons-extended` 的 2 万多个图标类由 R8 裁剪）
+- 语言资源限制为简体中文与 English
+- 应用版本号 0.5.0
+
+### 修复
+
+- Android 13+ 手动切换语言后界面未刷新：补充 `localeConfig`，并在 `attachBaseContext` 中应用保存的语言
+
+### 未支持
+
+- HEIC / AVIF 作为写入载体（会转为 PNG 输出）
+- 原版「图片文件夹」v1.1 只能读取 PNG 载体；JPEG/WebP 载体需要本应用
+- RAR 及 RAR 分卷
+
+### 测试
+
+- 45 个 JVM 单元测试（新增 JPEG APP15 分段、WebP RIFF chunk 用例）
+- 新增真机用例：JPEG/WebP 载体写入后仍可被系统解码
+- 5 个真机 instrumentation 测试
+
 ## v0.4.0 — 2026-11-15
 
 ### 新增

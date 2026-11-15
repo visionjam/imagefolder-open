@@ -1,13 +1,5 @@
 package com.imagefolder.open.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.zip.CRC32
@@ -53,9 +45,7 @@ object PngChunkCodec {
     const val CHUNK_NAME = "tpWj"
 
     private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
-    private const val HEADER_TERMINATOR: Byte = 0
     private const val CHUNK_OVERHEAD = 12
-    private val json = Json { ignoreUnknownKeys = true }
 
     fun isPng(data: ByteArray): Boolean =
         data.size >= PNG_SIGNATURE.size && PNG_SIGNATURE.indices.all { data[it] == PNG_SIGNATURE[it] }
@@ -75,8 +65,9 @@ object PngChunkCodec {
         val out = ByteArrayOutputStream(coverPng.size)
         out.write(coverPng, 0, idatOffset)
         files.forEach { file ->
-            val header = encodeHeader(HiddenItem(file.name, file.mime, file.bytes))
-            val payload = header + byteArrayOf(HEADER_TERMINATOR) + file.bytes
+            val payload = HiddenPayloadCodec.encodePayload(
+                HiddenItem(name = file.name, mime = file.mime, bytes = file.bytes),
+            )
             out.write(buildChunk(chunkName, payload))
         }
         out.write(coverPng, idatOffset, coverPng.size - idatOffset)
@@ -105,16 +96,17 @@ object PngChunkCodec {
         val idatOffset = firstChunkOffset(coverPng, "IDAT")
             ?: throw IllegalArgumentException("PNG 缺少 IDAT 数据块")
 
-        val header = buildJsonObject {
-            put("name", name)
-            mime?.let { put("mime", it) }
-            put("format", "ifv2")
-            put("enc", encrypted)
-            put("comp", compressed)
-            put("entries", entryCount)
-        }
-        val payload = header.toString().toByteArray(StandardCharsets.UTF_8) +
-            byteArrayOf(HEADER_TERMINATOR) + envelope
+        val payload = HiddenPayloadCodec.encodePayload(
+            HiddenItem(
+                name = name,
+                mime = mime,
+                bytes = envelope,
+                format = "ifv2",
+                encrypted = encrypted,
+                compressed = compressed,
+                entryCount = entryCount,
+            ),
+        )
 
         val out = ByteArrayOutputStream(coverPng.size + payload.size + CHUNK_OVERHEAD)
         out.write(coverPng, 0, idatOffset)
@@ -134,7 +126,7 @@ object PngChunkCodec {
             val type = String(png, offset + 4, 4, StandardCharsets.US_ASCII)
             if (type == chunkName) {
                 val payload = png.copyOfRange(offset + 8, offset + 8 + length)
-                parsePayload(payload)?.let(items::add)
+                HiddenPayloadCodec.parse(payload)?.let(items::add)
             }
             offset = next.toInt()
         }
@@ -150,41 +142,6 @@ object PngChunkCodec {
         crc.update(chunk, 4, 4 + payload.size)
         writeInt(chunk, 8 + payload.size, crc.value.toInt())
         return chunk
-    }
-
-    private fun encodeHeader(item: HiddenItem): ByteArray {
-        val header = buildJsonObject {
-            put("name", item.name)
-            item.mime?.let { put("mime", it) }
-            item.format?.let { put("format", it) }
-            item.encrypted?.let { put("enc", it) }
-            item.compressed?.let { put("comp", it) }
-            item.entryCount?.let { put("entries", it) }
-        }
-        return header.toString().toByteArray(StandardCharsets.UTF_8)
-    }
-
-    private fun parsePayload(payload: ByteArray): HiddenItem? {
-        val separator = payload.indexOfFirst { it == HEADER_TERMINATOR }
-        if (separator <= 0) return null
-        val header = runCatching {
-            json.parseToJsonElement(String(payload, 0, separator, StandardCharsets.UTF_8)).jsonObject
-        }.getOrNull() ?: return null
-        val name = header["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() } ?: return null
-        val mime = header["mime"]?.jsonPrimitive?.contentOrNull
-        val format = header["format"]?.jsonPrimitive?.contentOrNull
-        val encrypted = header["enc"]?.jsonPrimitive?.booleanOrNull
-        val compressed = header["comp"]?.jsonPrimitive?.booleanOrNull
-        val entryCount = header["entries"]?.jsonPrimitive?.intOrNull
-        return HiddenItem(
-            name = name,
-            mime = mime,
-            bytes = payload.copyOfRange(separator + 1, payload.size),
-            format = format,
-            encrypted = encrypted,
-            compressed = compressed,
-            entryCount = entryCount,
-        )
     }
 
     private fun firstChunkOffset(png: ByteArray, type: String): Int? {

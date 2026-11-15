@@ -11,6 +11,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import java.io.ByteArrayOutputStream
 import kotlin.math.hypot
 
@@ -26,19 +27,47 @@ object ImageProcessor {
     }
 
     /**
-     * Renders the cover (or a generated placeholder) to PNG, drawing the optional
-     * note in the top-right corner just like the original app.
+     * Sniffs the cover container so output can keep PNG, JPEG or WebP.
+     * Returns null for containers this app does not write to (e.g. HEIC/AVIF);
+     * callers fall back to PNG.
      */
-    fun renderHiddenImage(cover: Bitmap?, note: String?): ByteArray {
+    fun detectCarrier(context: Context, uri: Uri): CarrierFormat? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val header = ByteArray(16)
+            val read = input.read(header)
+            if (read <= 0) null else CarrierCodec.detect(header.copyOf(read))
+        }
+    }.getOrNull()
+
+    /**
+     * Renders the cover (or a generated placeholder) to [format], drawing the
+     * optional note in the top-right corner just like the original app.
+     */
+    fun renderHiddenImage(
+        cover: Bitmap?,
+        note: String?,
+        format: CarrierFormat = CarrierFormat.PNG,
+    ): ByteArray {
         val base = when {
             cover == null -> generatePlaceholderCover()
             cover.isMutable -> cover
             else -> requireNotNull(cover.copy(Bitmap.Config.ARGB_8888, true)) { "无法复制封面图像" }
         }
         if (!note.isNullOrBlank()) drawNote(base, note)
+        val compressFormat = when (format) {
+            CarrierFormat.PNG -> Bitmap.CompressFormat.PNG
+            CarrierFormat.JPEG -> Bitmap.CompressFormat.JPEG
+            CarrierFormat.WEBP -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
+        }
+        val quality = if (format == CarrierFormat.PNG) 100 else 95
         val out = ByteArrayOutputStream()
-        if (!base.compress(Bitmap.CompressFormat.PNG, 100, out)) {
-            throw IllegalStateException("PNG 编码失败")
+        if (!base.compress(compressFormat, quality, out)) {
+            throw IllegalStateException("${format.name} 编码失败")
         }
         return out.toByteArray()
     }

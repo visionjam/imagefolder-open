@@ -3,6 +3,7 @@ package com.imagefolder.open
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,8 +25,29 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imagefolder.open.ui.ImageFolderApp
 import com.imagefolder.open.ui.theme.ImageFolderTheme
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        // Keep the preference names in sync with MainViewModel.
+        val mode = runCatching {
+            newBase.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getString("language_mode", LanguageMode.SYSTEM.name)
+        }.getOrNull()
+        val locale = when (mode) {
+            LanguageMode.CHINESE.name -> Locale.SIMPLIFIED_CHINESE
+            LanguageMode.ENGLISH.name -> Locale.ENGLISH
+            else -> null
+        }
+        if (locale == null) {
+            super.attachBaseContext(newBase)
+        } else {
+            val configuration = Configuration(newBase.resources.configuration)
+            configuration.setLocale(locale)
+            super.attachBaseContext(newBase.createConfigurationContext(configuration))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
