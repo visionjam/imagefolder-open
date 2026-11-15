@@ -102,7 +102,8 @@
     <string name="about_disclaimer_title">免责声明</string>
     <string name="about_disclaimer">本应用仅供技术研究与个人备份使用。请勿用于传播违法内容或侵犯他人权益，使用者的行为及后果由使用者自行承担。</string>
     <string name="about_open_source_title">关于本项目</string>
-    <string name="about_open_source">本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现，代码与素材全部重写，与原作者无关。界面采用 Material Design 3。</string>
+    <string name="about_open_source">本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现，代码与素材全部重写，与原作者无关。界面采用 Material Design 3，采用 GPL-3.0 许可证开源。</string>
+    <string name="about_license">许可证：GNU GPL v3.0</string>
     <string name="about_project_title">项目地址</string>
     <string name="about_project_url">https://github.com/visionjam/imagefolder-open</string>
     <string name="about_bundle_title">v0.2 新格式</string>

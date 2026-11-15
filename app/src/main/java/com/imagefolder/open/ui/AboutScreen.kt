@@ -110,6 +110,11 @@ fun AboutScreen(
                     uriHandler.openUri("https://github.com/visionjam/imagefolder-open")
                 },
             )
+            Text(
+                text = stringResource(R.string.about_license),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         InfoSection(
             title = stringResource(R.string.about_disclaimer_title),

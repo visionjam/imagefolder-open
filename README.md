@@ -126,6 +126,13 @@ app/src/main/java/com/imagefolder/open/
 
 本应用仅供技术研究与个人备份使用。请勿用于传播违法内容或侵犯他人权益，使用者的行为及后果由使用者自行承担。
 
+## 致谢
+
+- 解压格式与库选型参考了 [ZipXtract](https://github.com/WirelessAlien/ZipXtract)（GPL-3.0）
+- 使用 Apache Commons Compress、XZ for Java（公共领域）、Zip4j 等开源库
+
 ## License
 
-MIT
+Copyright (C) 2026 Vision Jam
+
+本项目采用 **GNU General Public License v3.0**，详见 [LICENSE](LICENSE)。
