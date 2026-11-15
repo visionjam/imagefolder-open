@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -47,6 +49,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -57,12 +61,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.imagefolder.open.ExtractItem
 import com.imagefolder.open.ExtractUiState
 import com.imagefolder.open.MainViewModel
@@ -88,6 +95,16 @@ fun ExtractScreen(
     }
     val scanPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) viewModel.scanFolder(uri)
+    }
+    val allFilesAccess by viewModel.allFilesAccess.collectAsState()
+    var showBrowser by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshAllFilesAccess()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
@@ -141,6 +158,50 @@ fun ExtractScreen(
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.scan_folder))
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (allFilesAccess) {
+                Text(
+                    text = stringResource(R.string.all_files_granted),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                OutlinedButton(
+                    onClick = { showBrowser = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.browse_folders))
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.all_files_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.all_files_grant))
+                }
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.all_files_android_11),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         if (state.scanning) {
@@ -312,6 +373,16 @@ fun ExtractScreen(
 
     previewItem?.let { item ->
         PreviewDialog(item = item, onDismiss = { previewItem = null })
+    }
+
+    if (showBrowser) {
+        FolderBrowserDialog(
+            onDismiss = { showBrowser = false },
+            onSelect = { directory ->
+                showBrowser = false
+                viewModel.scanDirectory(directory)
+            },
+        )
     }
 
     if (state.needsPassword) {

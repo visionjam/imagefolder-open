@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.CarrierProbe
+import java.io.File
 
 data class ScanHit(
     val uri: Uri,
@@ -46,6 +47,40 @@ object FolderScanner {
             hits += ScanHit(
                 uri = uri,
                 name = file.name ?: uri.lastPathSegment ?: "image",
+                size = file.length(),
+                format = probe.format,
+                entries = probe.entries,
+                encrypted = probe.encrypted,
+            )
+        }
+        if (!cancelled) onProgress(total, total)
+        return hits
+    }
+
+    /** Scans a folder reached through the all-files browser. */
+    fun scanDirectory(
+        root: File,
+        onProgress: (scanned: Int, total: Int) -> Unit,
+        shouldContinue: () -> Boolean,
+    ): List<ScanHit> {
+        val images = ImageFiles.collect(root, shouldContinue)
+        if (!shouldContinue()) return emptyList()
+
+        val hits = mutableListOf<ScanHit>()
+        val total = images.size
+        var cancelled = false
+        for ((index, file) in images.withIndex()) {
+            if (!shouldContinue()) {
+                cancelled = true
+                break
+            }
+            onProgress(index, total)
+            val probe = runCatching {
+                file.inputStream().use { CarrierProbe.probe(it) }
+            }.getOrNull() ?: continue
+            hits += ScanHit(
+                uri = Uri.fromFile(file),
+                name = file.name,
                 size = file.length(),
                 format = probe.format,
                 entries = probe.entries,

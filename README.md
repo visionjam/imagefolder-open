@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.7.0** · [Changelog](CHANGELOG.md)
+> Current version: **v0.8.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
@@ -30,6 +30,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Open non-image files after saving
   - Export to a folder while preserving the directory structure
 - **Folder scan**: recursively scan a folder and list PNG / JPEG / WebP images that contain hidden content; add them all to extraction
+- **All files access (optional)**: after granting it in system settings, browse the internal storage root, Download and other ordinary folders the system picker cannot open
 - **Unpack**: archives in extraction results can be unpacked in-app
   - ZIP (ZipCrypto / AES passwords), 7z (password)
   - TAR, GZ, BZ2, XZ (including `.tar.gz` / `.tar.bz2` / `.tar.xz`)
@@ -59,6 +60,7 @@ PNG output without advanced features still writes the original per-file `tpWj` c
 - **All local.** Packing, extraction and decryption run entirely on the device. Nothing is uploaded.
 - **What encryption protects.** An encrypted bundle hides the payload contents and inner file names. It does **not** hide the fact that the image contains hidden data, the entry count, or the carrier image itself.
 - **Transit risk.** Chat and social apps may recompress images or strip unknown chunks/segments. Send the image as a file when possible; the recipient needs this app to extract it.
+- **All files access is optional.** It is used only to browse ordinary folders the system picker cannot open; the app still uploads nothing.
 - **Password loss is unrecoverable.** Passwords are never stored.
 - See [SECURITY.md](SECURITY.md) for the threat model and [docs/FORMAT.md](docs/FORMAT.md) for the on-disk format.
 
@@ -154,6 +156,7 @@ app/src/main/java/com/imagefolder/open/
 
 - Requires Android 10 (API 29) or newer
 - Payloads are limited to 64 MB because files are read fully into memory and packing keeps several copies; split larger sets
+- Optional all-files access still cannot read `Android/data` / `Android/obb`; a Shizuku/root mode is not implemented yet
 - JPEG / WebP carriers are re-encoded at quality 95 (EXIF and other metadata are dropped); PNG output is lossless
 - JPEG / WebP carriers can only be extracted by this app; the original Image Folder v1.1 only reads PNG
 - Passwords are not stored; a lost password cannot be recovered

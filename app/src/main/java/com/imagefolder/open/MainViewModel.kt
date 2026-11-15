@@ -4,8 +4,9 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.webkit.MimeTypeMap
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.imagefolder.open.core.ArchiveEntry
@@ -121,7 +122,6 @@ data class ExtractUiState(
     val scanScanned: Int = 0,
     val scanTotal: Int = 0,
     val scanHits: List<ScanHit> = emptyList(),
-    val scanFolderName: String? = null,
     val scanCompleted: Boolean = false,
     val scanError: String? = null,
 )
@@ -147,6 +147,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var scanGeneration = 0
+
+    private val _allFilesAccess = MutableStateFlow(hasAllFilesAccess())
+    val allFilesAccess: StateFlow<Boolean> = _allFilesAccess.asStateFlow()
 
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
@@ -618,48 +621,67 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pack.update { it.copy(result = null) }
     }
 
+    fun refreshAllFilesAccess() {
+        _allFilesAccess.value = hasAllFilesAccess()
+    }
+
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+
     fun scanFolder(uri: Uri) {
-        scanJob?.cancel()
-        val generation = ++scanGeneration
-        scanJob = viewModelScope.launch {
-            val app = getApplication<Application>()
+        val app = getApplication<Application>()
+        startScan { report, continueScan ->
             runCatching {
                 app.contentResolver.takePersistableUriPermission(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
+            FolderScanner.scan(app, uri, report, continueScan)
+        }
+    }
+
+    fun scanDirectory(root: File) {
+        if (!_allFilesAccess.value) {
+            showMessage(getApplication<Application>().getString(R.string.msg_all_files_required))
+            return
+        }
+        startScan { report, continueScan ->
+            FolderScanner.scanDirectory(root, report, continueScan)
+        }
+    }
+
+    private fun startScan(
+        scan: suspend (
+            report: (scanned: Int, total: Int) -> Unit,
+            continueScan: () -> Boolean,
+        ) -> List<ScanHit>,
+    ) {
+        scanJob?.cancel()
+        val generation = ++scanGeneration
+        scanJob = viewModelScope.launch {
+            val app = getApplication<Application>()
             _extract.update {
                 it.copy(
                     scanning = true,
                     scanScanned = 0,
                     scanTotal = 0,
                     scanHits = emptyList(),
-                    scanFolderName = null,
                     scanCompleted = false,
                     scanError = null,
                 )
             }
             try {
-                val folderName = withContext(Dispatchers.IO) {
-                    runCatching { DocumentFile.fromTreeUri(app, uri)?.name }.getOrNull()
-                        ?: uri.lastPathSegment ?: "folder"
-                }
-                if (generation != scanGeneration) return@launch
-                _extract.update { it.copy(scanFolderName = folderName) }
-
                 val hits = withContext(Dispatchers.IO) {
-                    FolderScanner.scan(
-                        context = app,
-                        treeUri = uri,
-                        onProgress = { scanned, total ->
+                    scan(
+                        { scanned, total ->
                             if (generation == scanGeneration) {
                                 _extract.update { state ->
                                     state.copy(scanScanned = scanned, scanTotal = total)
                                 }
                             }
                         },
-                        shouldContinue = { isActive },
+                        { generation == scanGeneration && isActive },
                     )
                 }
                 if (generation == scanGeneration) {
@@ -712,30 +734,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addScanHitsToExtract() {
         val hits = _extract.value.scanHits
         if (hits.isEmpty()) return
-        viewModelScope.launch {
-            val app = getApplication<Application>()
-            val files = withContext(Dispatchers.IO) {
-                hits.mapNotNull { hit ->
-                    runCatching { UriUtils.describe(app, hit.uri) }.getOrNull()
-                }
-            }
-            if (files.isEmpty()) {
-                showMessage(app.getString(R.string.msg_share_no_files))
-                return@launch
-            }
-            resetExtractForNewSources(files)
-            _extract.update {
-                it.copy(
-                    scanHits = emptyList(),
-                    scanCompleted = false,
-                    scanTotal = 0,
-                    scanScanned = 0,
-                    scanFolderName = null,
-                    scanError = null,
-                )
-            }
-            showMessage(app.getString(R.string.msg_scan_added, files.size))
+        val files = hits.map { hit ->
+            PickedFile(
+                uri = hit.uri,
+                name = hit.name,
+                size = hit.size,
+                mime = UriUtils.guessMime(hit.name),
+            )
         }
+        resetExtractForNewSources(files)
+        _extract.update {
+            it.copy(
+                scanHits = emptyList(),
+                scanCompleted = false,
+                scanTotal = 0,
+                scanScanned = 0,
+                scanError = null,
+            )
+        }
+        showMessage(getApplication<Application>().getString(R.string.msg_scan_added, files.size))
     }
 
     fun setExtractSources(uris: List<Uri>) {
