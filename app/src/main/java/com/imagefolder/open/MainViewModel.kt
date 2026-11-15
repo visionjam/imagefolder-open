@@ -1081,9 +1081,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             for (entry in newEntries) {
                 totalBytes += entry.bytes.size
                 if (totalBytes > MAX_PACK_BYTES) {
-                    throw IllegalStateException(
-                        app.getString(R.string.msg_payload_too_large),
-                    )
+                    throw PayloadTooLargeException()
                 }
                 entries += entry
             }
