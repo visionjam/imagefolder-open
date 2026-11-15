@@ -104,6 +104,55 @@ class PngChunkCodecTest {
         assertFalse(PngChunkCodec.isPng("GIF89a".toByteArray()))
     }
 
+    @Test
+    fun `bundle chunk round trip carries v2 metadata`() {
+        val envelope = ByteArray(64) { (it * 7).toByte() }
+        val covered = PngChunkCodec.insertBundle(
+            coverPng = minimalPng(),
+            name = "bundle.zip",
+            mime = "application/zip",
+            envelope = envelope,
+            encrypted = true,
+            compressed = true,
+            entryCount = 3,
+        )
+
+        val items = PngChunkCodec.extractItems(covered)
+        assertEquals(1, items.size)
+        assertEquals("bundle.zip", items[0].name)
+        assertEquals("application/zip", items[0].mime)
+        assertEquals("ifv2", items[0].format)
+        assertEquals(true, items[0].encrypted)
+        assertEquals(true, items[0].compressed)
+        assertEquals(3, items[0].entryCount)
+        assertArrayEquals(envelope, items[0].bytes)
+        assertTrue(PngChunkCodec.extractFiles(covered).isEmpty())
+    }
+
+    @Test
+    fun `legacy and bundle chunks coexist`() {
+        val withLegacy = PngChunkCodec.insertFiles(
+            minimalPng(),
+            listOf(HiddenFile("old.txt", "text/plain", "legacy".toByteArray())),
+        )
+        val covered = PngChunkCodec.insertBundle(
+            coverPng = withLegacy,
+            name = "bundle.zip",
+            mime = "application/zip",
+            envelope = byteArrayOf(1, 2, 3),
+            encrypted = false,
+            compressed = true,
+            entryCount = 1,
+        )
+
+        val items = PngChunkCodec.extractItems(covered)
+        assertEquals(2, items.size)
+        assertEquals("old.txt", items[0].name)
+        assertEquals(null, items[0].format)
+        assertEquals("bundle.zip", items[1].name)
+        assertEquals("ifv2", items[1].format)
+    }
+
     private fun minimalPng(): ByteArray {
         val ihdr = ByteArray(13).also { data ->
             writeInt(data, 0, 1)

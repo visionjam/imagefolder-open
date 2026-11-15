@@ -1,5 +1,6 @@
 package com.imagefolder.open.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.imagefolder.open.R
@@ -31,6 +33,7 @@ fun AboutScreen(
     onCompatModeChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val versionName = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
@@ -87,9 +90,27 @@ fun AboutScreen(
             body = stringResource(R.string.about_format),
         )
         InfoSection(
+            title = stringResource(R.string.about_bundle_title),
+            body = stringResource(R.string.about_bundle_format),
+        )
+        InfoSection(
             title = stringResource(R.string.about_open_source_title),
             body = stringResource(R.string.about_open_source),
         )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = stringResource(R.string.about_project_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.about_project_url),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    uriHandler.openUri("https://github.com/visionjam/imagefolder-open")
+                },
+            )
+        }
         InfoSection(
             title = stringResource(R.string.about_disclaimer_title),
             body = stringResource(R.string.about_disclaimer),

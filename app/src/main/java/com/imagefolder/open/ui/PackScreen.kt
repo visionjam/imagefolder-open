@@ -26,20 +26,30 @@ import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +57,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +66,7 @@ import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.PackUiState
 import com.imagefolder.open.R
 import com.imagefolder.open.data.PickedFile
+import com.imagefolder.open.data.PickedFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -76,6 +89,14 @@ fun PackScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri != null) viewModel.addPayloads(listOf(uri))
         }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.addFolder(uri)
+    }
+
+    val passwordMismatch = state.passwordConfirm.isNotEmpty() && state.password != state.passwordConfirm
+    val hasContent = state.payloads.isNotEmpty() || state.folders.isNotEmpty()
+    val passwordReady = !state.encrypt ||
+        (state.password.isNotEmpty() && state.password == state.passwordConfirm)
 
     Column(
         modifier = Modifier
@@ -203,6 +224,86 @@ fun PackScreen(
             )
         }
 
+        Text(
+            text = stringResource(R.string.folder_section),
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        if (state.folders.isEmpty()) {
+            Text(
+                text = stringResource(R.string.folder_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.folders.forEach { folder ->
+                    FolderRow(folder = folder, onRemove = { viewModel.removeFolder(folder.uri) })
+                }
+            }
+        }
+
+        OutlinedButton(
+            onClick = { folderPicker.launch(null) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.pick_folder))
+        }
+
+        HorizontalDivider()
+
+        Text(
+            text = stringResource(R.string.options_section),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        OptionSwitchRow(
+            icon = Icons.Outlined.FolderZip,
+            title = stringResource(R.string.compress_title),
+            summary = stringResource(R.string.compress_summary),
+            checked = state.compress,
+            onCheckedChange = viewModel::setCompress,
+        )
+        OptionSwitchRow(
+            icon = Icons.Outlined.Lock,
+            title = stringResource(R.string.encrypt_title),
+            summary = stringResource(R.string.encrypt_summary),
+            checked = state.encrypt,
+            onCheckedChange = viewModel::setEncrypt,
+        )
+
+        if (state.encrypt) {
+            PasswordField(
+                value = state.password,
+                onValueChange = viewModel::setPassword,
+                label = stringResource(R.string.password_label),
+            )
+            PasswordField(
+                value = state.passwordConfirm,
+                onValueChange = viewModel::setPasswordConfirm,
+                label = stringResource(R.string.password_confirm_label),
+            )
+            if (passwordMismatch) {
+                Text(
+                    text = stringResource(R.string.password_mismatch),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(
+                text = stringResource(R.string.password_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.advanced_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         OutlinedTextField(
             value = state.note,
             onValueChange = viewModel::setNote,
@@ -214,7 +315,7 @@ fun PackScreen(
 
         Button(
             onClick = viewModel::generate,
-            enabled = state.payloads.isNotEmpty() && !state.generating,
+            enabled = hasContent && passwordReady && !state.generating,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
@@ -272,4 +373,97 @@ private fun PayloadRow(file: PickedFile, onRemove: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun FolderRow(folder: PickedFolder, onRemove: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.folder_file_count, folder.fileCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.remove),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionSwitchRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    summary: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun PasswordField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+) {
+    var visible by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = if (visible) {
+            VisualTransformation.None
+        } else {
+            PasswordVisualTransformation()
+        },
+        trailingIcon = {
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    imageVector = if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    contentDescription = stringResource(
+                        if (visible) R.string.hide_password else R.string.show_password,
+                    ),
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

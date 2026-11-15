@@ -25,13 +25,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,6 +54,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -69,6 +78,9 @@ fun ExtractScreen(
         ActivityResultContracts.PickMultipleVisualMedia(100),
     ) { uris ->
         viewModel.setExtractSources(uris)
+    }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.exportToFolder(uri)
     }
 
     Column(
@@ -115,7 +127,7 @@ fun ExtractScreen(
         }
 
         Button(
-            onClick = viewModel::extract,
+            onClick = { viewModel.extract() },
             enabled = state.sources.isNotEmpty() && !state.extracting,
             modifier = Modifier
                 .fillMaxWidth()
@@ -151,6 +163,25 @@ fun ExtractScreen(
                 }
             }
 
+            OutlinedButton(
+                onClick = { exportPicker.launch(null) },
+                enabled = !state.exporting,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (state.exporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.exporting))
+                } else {
+                    Icon(Icons.Outlined.SaveAlt, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.export_to_folder))
+                }
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.results.forEachIndexed { index, item ->
                     ExtractedRow(
@@ -169,6 +200,14 @@ fun ExtractScreen(
     previewItem?.let { item ->
         PreviewDialog(item = item, onDismiss = { previewItem = null })
     }
+
+    if (state.needsPassword) {
+        PasswordPromptDialog(
+            passwordError = state.passwordError,
+            onConfirm = viewModel::extractWithPassword,
+            onDismiss = viewModel::cancelPasswordPrompt,
+        )
+    }
 }
 
 @Composable
@@ -178,7 +217,7 @@ private fun ExtractedRow(
     onSave: () -> Unit,
     onOpen: () -> Unit,
 ) {
-    val image = isImageMime(item.mime, item.name)
+    val image = !item.isDirectory && isImageMime(item.mime, item.name)
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(16.dp),
@@ -187,10 +226,10 @@ private fun ExtractedRow(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = if (image) {
-                        Icons.Outlined.PhotoLibrary
-                    } else {
-                        Icons.AutoMirrored.Outlined.InsertDriveFile
+                    imageVector = when {
+                        item.isDirectory -> Icons.Outlined.Folder
+                        image -> Icons.Outlined.PhotoLibrary
+                        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
                     },
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
@@ -204,42 +243,59 @@ private fun ExtractedRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = stringResource(R.string.source_from, item.sourceName),
+                        text = if (item.isDirectory) {
+                            stringResource(R.string.directory_badge)
+                        } else if (item.relativePath != item.name) {
+                            item.relativePath
+                        } else {
+                            stringResource(R.string.source_from, item.sourceName)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = formatSize(item.bytes.size.toLong()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (!item.isDirectory) {
+                    Text(
+                        text = formatSize(item.bytes.size.toLong()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (image) {
-                    TextButton(onClick = onPreview) {
-                        Text(stringResource(R.string.preview))
-                    }
-                }
-                if (item.savedUri == null) {
-                    TextButton(onClick = onSave) {
-                        Text(stringResource(R.string.save))
-                    }
-                } else {
+                if (item.isDirectory) {
                     Text(
-                        text = stringResource(R.string.saved_badge),
+                        text = stringResource(R.string.directory_badge),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
-                    TextButton(onClick = onOpen) {
-                        Text(stringResource(R.string.open))
+                } else {
+                    if (image) {
+                        TextButton(onClick = onPreview) {
+                            Text(stringResource(R.string.preview))
+                        }
+                    }
+                    if (item.savedUri == null) {
+                        TextButton(onClick = onSave) {
+                            Text(stringResource(R.string.save))
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.saved_badge),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                        TextButton(onClick = onOpen) {
+                            Text(stringResource(R.string.open))
+                        }
                     }
                 }
             }
@@ -292,6 +348,71 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun PasswordPromptDialog(
+    passwordError: Boolean,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.password_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.password_dialog_message))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(stringResource(R.string.password_label)) },
+                    singleLine = true,
+                    visualTransformation = if (visible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { visible = !visible }) {
+                            Icon(
+                                imageVector = if (visible) {
+                                    Icons.Outlined.VisibilityOff
+                                } else {
+                                    Icons.Outlined.Visibility
+                                },
+                                contentDescription = stringResource(
+                                    if (visible) R.string.hide_password else R.string.show_password,
+                                ),
+                            )
+                        }
+                    },
+                )
+                if (passwordError) {
+                    Text(
+                        text = stringResource(R.string.password_wrong),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (password.isNotEmpty()) onConfirm(password) },
+                enabled = password.isNotEmpty(),
+            ) {
+                Text(stringResource(R.string.unlock))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }
 
 private fun openFile(context: Context, item: ExtractItem) {

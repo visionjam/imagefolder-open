@@ -18,7 +18,22 @@ data class SavedFile(
  */
 class GallerySaver(private val context: Context) {
 
-    fun save(bytes: ByteArray, fileName: String, mime: String?): SavedFile {
+    /** Legacy flat save, kept for simple files. */
+    fun save(bytes: ByteArray, fileName: String, mime: String?): SavedFile =
+        saveRelative(bytes, fileName, mime)
+
+    /**
+     * Saves [bytes] under `Pictures/图片文件夹/<dirs>` for images or
+     * `Download/图片文件夹/<dirs>` for everything else.
+     */
+    fun saveRelative(bytes: ByteArray, relativePath: String, mime: String?): SavedFile {
+        val segments = relativePath.split('/')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != "." && it != ".." }
+            .map { it.replace('\\', '_').replace('\u0000', '_') }
+        val fileName = segments.lastOrNull() ?: "file"
+        val subDirectory = segments.dropLast(1).joinToString("/")
+
         val resolver = context.contentResolver
         val effectiveMime = mime?.takeIf { it.isNotBlank() }
             ?: UriUtils.guessMime(fileName)
@@ -29,12 +44,17 @@ class GallerySaver(private val context: Context) {
         } else {
             MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         }
-        val relativePath = if (isImage) "Pictures/图片文件夹" else "Download/图片文件夹"
+        val baseDirectory = if (isImage) "Pictures/图片文件夹" else "Download/图片文件夹"
+        val targetDirectory = if (subDirectory.isEmpty()) {
+            baseDirectory
+        } else {
+            "$baseDirectory/$subDirectory"
+        }
 
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, effectiveMime)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, targetDirectory)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
@@ -48,7 +68,7 @@ class GallerySaver(private val context: Context) {
             throw t
         }
 
-        return SavedFile(uri, queryDisplayName(uri) ?: fileName, relativePath)
+        return SavedFile(uri, queryDisplayName(uri) ?: fileName, targetDirectory)
     }
 
     private fun queryDisplayName(uri: Uri): String? =

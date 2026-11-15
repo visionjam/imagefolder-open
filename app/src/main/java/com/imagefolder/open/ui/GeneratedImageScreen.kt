@@ -104,6 +104,13 @@ fun GeneratedImageScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (result.bundle) {
+                Text(
+                    text = stringResource(R.string.generated_entries, result.entryCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             val location = result.savedLocation
             if (result.saved && location != null) {

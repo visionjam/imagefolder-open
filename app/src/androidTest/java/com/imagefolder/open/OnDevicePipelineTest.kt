@@ -7,6 +7,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.imagefolder.open.core.BundleCodec
+import com.imagefolder.open.core.BundleEntry
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
@@ -75,6 +77,48 @@ class OnDevicePipelineTest {
             }
         } finally {
             context.contentResolver.delete(savedCover.uri, null, null)
+        }
+    }
+
+    @Test
+    fun encryptedBundlePipelineWorksOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val saver = GallerySaver(context)
+        val stamp = System.currentTimeMillis()
+
+        val cover = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        val coverPng = ImageProcessor.renderHiddenImage(cover, null)
+        val entries = listOf(
+            BundleEntry("目录/说明.txt", "设备端加密".toByteArray(StandardCharsets.UTF_8)),
+            BundleEntry("目录/子目录/data.bin", ByteArray(2048) { it.toByte() }),
+        )
+        val envelope = BundleCodec.pack(entries, compress = true, password = "pw-设备")
+        val png = PngChunkCodec.insertBundle(
+            coverPng = coverPng,
+            name = "bundle.zip",
+            mime = "application/zip",
+            envelope = envelope,
+            encrypted = true,
+            compressed = true,
+            entryCount = entries.size,
+        )
+
+        val decoded = BitmapFactory.decodeByteArray(png, 0, png.size)
+        assertNotNull(decoded)
+
+        val items = PngChunkCodec.extractItems(png)
+        assertEquals(1, items.size)
+        assertEquals("ifv2", items[0].format)
+        val unpacked = BundleCodec.unpack(items[0].bytes, "pw-设备")
+        assertEquals(entries.map { it.path }, unpacked.map { it.path })
+        assertArrayEquals(entries[1].bytes, unpacked[1].bytes)
+
+        val saved = saver.saveRelative(entries[0].bytes, entries[0].path, "text/plain")
+        try {
+            val readBack = context.contentResolver.openInputStream(saved.uri)!!.use { it.readBytes() }
+            assertArrayEquals(entries[0].bytes, readBack)
+        } finally {
+            context.contentResolver.delete(saved.uri, null, null)
         }
     }
 }
