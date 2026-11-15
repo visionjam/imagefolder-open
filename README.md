@@ -4,7 +4,7 @@
 
 > 本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现。代码与素材全部重写，不包含原应用的任何代码或资源。
 >
-> 当前版本：**v0.2.0**
+> 当前版本：**v0.2.0** · [更新日志](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="32%" />
@@ -88,11 +88,15 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个 `tpWj` chunk，�
 - 路径穿越与恶意 ZIP 防护
 - 损坏数据与非法输入
 
+当前共 **21 个 JVM 单元测试 + 2 个真机用例**。
+
 真机端到端测试（需要连接设备）：
 
 ```bash
 ./gradlew connectedDebugAndroidTest
 ```
+
+发版流程见 [docs/RELEASING.md](docs/RELEASING.md)。
 
 ## 项目结构
 
