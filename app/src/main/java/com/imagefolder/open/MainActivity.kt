@@ -3,10 +3,14 @@ package com.imagefolder.open
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -22,12 +26,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imagefolder.open.ui.ImageFolderApp
 import com.imagefolder.open.ui.theme.ImageFolderTheme
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
+    private val viewModel: MainViewModel by viewModels()
+
     override fun attachBaseContext(newBase: Context) {
         // Keep the preference names in sync with MainViewModel.
         val mode = runCatching {
@@ -52,13 +57,49 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AppRoot()
+            AppRoot(viewModel = viewModel)
         }
+        if (savedInstanceState == null) handleShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return
+        val uris = streamUris(intent)
+        if (uris.isEmpty()) {
+            viewModel.showMessage(getString(R.string.msg_share_no_files))
+            return
+        }
+        viewModel.handleSharedUris(uris)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun streamUris(intent: Intent): List<Uri> {
+        val list = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }
+        val single = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+        val clip = intent.clipData?.let { data ->
+            (0 until data.itemCount).mapNotNull { data.getItemAt(it).uri }
+        }.orEmpty()
+        return (list.orEmpty() + listOfNotNull(single) + clip).distinct()
     }
 }
 
 @Composable
-private fun AppRoot(viewModel: MainViewModel = viewModel()) {
+private fun AppRoot(viewModel: MainViewModel) {
     val themeMode by viewModel.themeMode.collectAsState()
     val languageMode by viewModel.languageMode.collectAsState()
 

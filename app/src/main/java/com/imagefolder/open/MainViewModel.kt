@@ -30,6 +30,8 @@ import com.imagefolder.open.data.FolderReader
 import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
+import com.imagefolder.open.data.ShareClassifier
+import com.imagefolder.open.data.SharedFile
 import com.imagefolder.open.data.UriUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -102,6 +104,11 @@ data class ExtractUiState(
     val unpackPasswordError: Boolean = false,
 )
 
+data class PendingShare(
+    val extractSources: List<PickedFile>,
+    val packSources: List<PickedFile>,
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -144,6 +151,107 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearMessage() {
         _message.value = null
+    }
+
+    private val _activeTab = MutableStateFlow(0)
+    val activeTab: StateFlow<Int> = _activeTab.asStateFlow()
+
+    private val _pendingShare = MutableStateFlow<PendingShare?>(null)
+    val pendingShare: StateFlow<PendingShare?> = _pendingShare.asStateFlow()
+
+    fun selectTab(index: Int) {
+        if (index in 0..2) _activeTab.value = index
+    }
+
+    fun handleSharedUris(uris: List<Uri>) {
+        if (uris.isEmpty()) {
+            showMessage(getApplication<Application>().getString(R.string.msg_share_no_files))
+            return
+        }
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val resolved = withContext(Dispatchers.IO) {
+                uris.distinct().mapNotNull { uri ->
+                    runCatching { UriUtils.describe(app, uri) }.getOrNull()
+                }
+            }
+            if (resolved.isEmpty()) {
+                showMessage(app.getString(R.string.msg_share_no_files))
+                return@launch
+            }
+            val shared = withContext(Dispatchers.IO) {
+                resolved.map { file ->
+                    val inspect = file.mime?.startsWith("image/") == true &&
+                        ShareClassifier.shouldInspect(file.size)
+                    val hasHidden = inspect && runCatching {
+                        val bytes = UriUtils.readAtMost(
+                            app,
+                            file.uri,
+                            ShareClassifier.MAX_INSPECT_BYTES,
+                        )
+                        bytes != null && CarrierCodec.extractItems(bytes).isNotEmpty()
+                    }.getOrDefault(false)
+                    SharedFile(
+                        uri = file.uri.toString(),
+                        name = file.name,
+                        mime = file.mime,
+                        size = file.size,
+                        hasHiddenPayload = hasHidden,
+                    )
+                }
+            }
+            val plan = ShareClassifier.classify(shared)
+            val byUri = resolved.associateBy { it.uri.toString() }
+            val incomingExtract = plan.extractUris.mapNotNull(byUri::get)
+            val incomingPack = plan.packUris.mapNotNull(byUri::get)
+            val current = _pendingShare.value
+            if (plan.needsChoice || current != null) {
+                // 对话框已存在时按 URI 去重合并，避免重复添加。
+                _pendingShare.value = PendingShare(
+                    extractSources = (current?.extractSources.orEmpty() + incomingExtract)
+                        .distinctBy { it.uri },
+                    packSources = (current?.packSources.orEmpty() + incomingPack)
+                        .distinctBy { it.uri },
+                )
+            } else {
+                addPayloadsDirect(incomingPack)
+                selectTab(0)
+                showMessage(app.getString(R.string.msg_share_added, incomingPack.size))
+            }
+        }
+    }
+
+    fun confirmShareExtract() {
+        val pending = _pendingShare.value ?: return
+        _pendingShare.value = null
+        _extract.update {
+            it.copy(
+                sources = pending.extractSources,
+                results = emptyList(),
+                hasExtracted = false,
+                needsPassword = false,
+                passwordError = false,
+            )
+        }
+        selectTab(1)
+    }
+
+    fun confirmSharePack() {
+        val pending = _pendingShare.value ?: return
+        _pendingShare.value = null
+        addPayloadsDirect(pending.packSources)
+        selectTab(0)
+    }
+
+    fun dismissPendingShare() {
+        _pendingShare.value = null
+    }
+
+    private fun addPayloadsDirect(files: List<PickedFile>) {
+        _pack.update { state ->
+            val existing = state.payloads.map { it.uri }.toSet()
+            state.copy(payloads = state.payloads + files.filterNot { it.uri in existing })
+        }
     }
 
     fun setCompatMode(enabled: Boolean) {

@@ -224,4 +224,18 @@ class OnDevicePipelineTest {
             context.contentResolver.delete(saved.uri, null, null)
         }
     }
+
+    @Test
+    fun readAtMostRejectsOversizedStreams() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = java.io.File(context.cacheDir, "read-at-most.bin").apply {
+            writeBytes(ByteArray(2 * 1024 * 1024))
+        }
+        val uri = android.net.Uri.fromFile(file)
+        val limited = com.imagefolder.open.data.UriUtils.readAtMost(context, uri, 1024 * 1024)
+        assertTrue(limited == null)
+        val full = com.imagefolder.open.data.UriUtils.readAtMost(context, uri, 3 * 1024 * 1024)
+        assertEquals(2 * 1024 * 1024, requireNotNull(full).size)
+        file.delete()
+    }
 }
