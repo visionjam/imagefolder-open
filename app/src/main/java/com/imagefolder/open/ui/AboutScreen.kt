@@ -78,6 +78,8 @@ fun AboutScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     languageMode: LanguageMode,
     onLanguageModeChange: (LanguageMode) -> Unit,
+    secureWindow: Boolean,
+    onSecureWindowChange: (Boolean) -> Unit,
     cacheBytes: Long,
     onClearCache: () -> Unit,
 ) {
@@ -141,6 +143,23 @@ fun AboutScreen(
                     }
                     Spacer(Modifier.width(12.dp))
                     Switch(checked = compatMode, onCheckedChange = onCompatModeChange)
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.about_secure_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.about_secure_summary),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(checked = secureWindow, onCheckedChange = onSecureWindowChange)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                 ChipSetting(

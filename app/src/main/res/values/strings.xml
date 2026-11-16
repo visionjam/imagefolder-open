@@ -204,4 +204,6 @@
     <string name="about_cache_title">清理缓存</string>
     <string name="about_cache_summary">临时文件占用 %1$s，点按立即清理</string>
     <string name="msg_cache_cleared">已清理缓存：%1$s</string>
+    <string name="about_secure_title">防截屏 / 遮挡最近任务</string>
+    <string name="about_secure_summary">开启后系统截图、录屏与最近任务缩略图都不会显示本应用内容。默认关闭，需要时再开。</string>
 </resources>

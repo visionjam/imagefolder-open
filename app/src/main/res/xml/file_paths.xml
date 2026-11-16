@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the share hand-off directory is exposed through the FileProvider.
+  The provider is not exported and every URI still needs an explicit grant, but
+  there is no reason to map the whole cache/ or files/ tree.
+-->
 <paths>
-    <cache-path name="cache" path="." />
-    <files-path name="files" path="." />
+    <cache-path name="shared" path="shared/" />
 </paths>

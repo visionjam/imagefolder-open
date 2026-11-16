@@ -163,11 +163,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val cacheBytes: StateFlow<Long> = _cacheBytes.asStateFlow()
 
     init {
-        // Transient payload copies and archive scratch files used to accumulate
-        // in cacheDir forever; prune them once per process start.
+        // Payload copies (shared/ and shared-in/) used to survive forever if the
+        // user only ever shared once, because the only cleanup ran inside the
+        // share path itself. Wipe them on every process start.
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                CacheCleaner.prune(getApplication<Application>().cacheDir, System.currentTimeMillis())
+                CacheCleaner.pruneOnStartup(
+                    getApplication<Application>().cacheDir,
+                    System.currentTimeMillis(),
+                )
             }
             refreshCacheInfo()
         }
@@ -178,6 +182,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
+
+    /** Opt-in FLAG_SECURE: hides the app in screenshots, recording and recents. */
+    private val _secureWindow = MutableStateFlow(prefs.getBoolean(KEY_SECURE_WINDOW, false))
+    val secureWindow: StateFlow<Boolean> = _secureWindow.asStateFlow()
 
     private val _themeMode = MutableStateFlow(
         runCatching {
@@ -390,6 +398,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCompatMode(enabled: Boolean) {
         _compatMode.value = enabled
         prefs.edit().putBoolean(KEY_COMPAT_MODE, enabled).apply()
+    }
+
+    fun setSecureWindow(enabled: Boolean) {
+        _secureWindow.value = enabled
+        prefs.edit().putBoolean(KEY_SECURE_WINDOW, enabled).apply()
     }
 
     fun setThemeMode(mode: ThemeMode) {
@@ -1367,6 +1380,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val PREFS_NAME = "settings"
         const val KEY_COMPAT_MODE = "compat_mode"
+        const val KEY_SECURE_WINDOW = "secure_window"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LANGUAGE_MODE = "language_mode"
         const val KEY_SHARE_WARNING_SEEN = "share_warning_seen"

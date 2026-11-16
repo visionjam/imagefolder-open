@@ -47,6 +47,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val pendingShare by viewModel.pendingShare.collectAsState()
     val shareWarningSeen by viewModel.shareWarningSeen.collectAsState()
     val cacheBytes by viewModel.cacheBytes.collectAsState()
+    val secureWindow by viewModel.secureWindow.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(activeTab) {
@@ -118,6 +119,8 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
                     onThemeModeChange = viewModel::setThemeMode,
                     languageMode = languageMode,
                     onLanguageModeChange = viewModel::setLanguageMode,
+                    secureWindow = secureWindow,
+                    onSecureWindowChange = viewModel::setSecureWindow,
                     cacheBytes = cacheBytes,
                     onClearCache = viewModel::clearCache,
                 )

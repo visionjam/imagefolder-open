@@ -204,4 +204,6 @@
     <string name="about_cache_title">Clear cache</string>
     <string name="about_cache_summary">Temporary files use %1$s; tap to clear</string>
     <string name="msg_cache_cleared">Cache cleared: %1$s</string>
+    <string name="about_secure_title">Block screenshots / recents preview</string>
+    <string name="about_secure_summary">Hides app content from screenshots, screen recording and the recents thumbnail. Off by default.</string>
 </resources>

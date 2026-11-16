@@ -47,6 +47,34 @@ This permission is used only for local browsing and scanning; the app still has
 no network permission and uploads nothing. It does not grant access to
 `Android/data` or `Android/obb`.
 
+### Local storage and cache
+
+The app writes three kinds of temporary files into its private cache
+directory, and all three can contain payloads:
+
+- `shared/` — the generated carrier image handed to the system share sheet
+- `shared-in/` — copies of files shared *into* this app
+- `imagefolder-*` — archive scratch files
+
+Session copies (`shared/`, `shared-in/`) are deleted on every process start
+once they are more than ten minutes old; archive scratch files follow a
+three-day / 64 MB budget. The About screen shows the current cache size and can
+clear it on demand.
+
+These files live in the app's private cache directory, which other apps cannot
+read, and they are never uploaded — the app has no network permission.
+
+### Backup and screen capture
+
+- **Auto Backup is disabled** (`android:allowBackup="false"`). App data is not
+  copied to Google Drive and is not transferred during device setup.
+- **FileProvider scope.** Only `cache/shared/` is exposed through the
+  FileProvider used for sharing. The provider is not exported, and each URI
+  still needs an explicit per-request grant.
+- **Screen capture.** Screenshots and screen recording are allowed by default.
+  About offers an opt-in "Block screenshots / recents preview" switch that sets
+  `FLAG_SECURE`, which also hides the app from the recents thumbnail.
+
 ### Transit and platform behavior
 
 Chat and social platforms may recompress images, convert them to another

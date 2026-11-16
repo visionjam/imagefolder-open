@@ -64,6 +64,9 @@ PNG output without advanced features still writes the original per-file `tpWj` c
 - **What encryption protects.** An encrypted bundle hides the payload contents and inner file names. It does **not** hide the fact that the image contains hidden data, the entry count, or the carrier image itself.
 - **Transit risk.** Chat and social apps may recompress images or strip unknown chunks/segments. Send the image as a file when possible; the recipient needs this app to extract it.
 - **All files access is optional.** It is used only to browse ordinary folders the system picker cannot open; the app still uploads nothing.
+- **The cache is cleaned for you.** Session copies of payloads (`shared/`, `shared-in/`) are deleted on every launch, archive scratch files follow a 3-day / 64 MB budget, and About can clear the cache on demand.
+- **No cloud backup.** `allowBackup` is off, so app data is not sent to Google Drive or moved during device setup.
+- **Optional screen protection.** About can enable `FLAG_SECURE` to hide the app from screenshots, screen recording and the recents thumbnail.
 - **Password loss is unrecoverable.** Passwords are never stored.
 - See [SECURITY.md](SECURITY.md) for the threat model and [docs/FORMAT.md](docs/FORMAT.md) for the on-disk format.
 
