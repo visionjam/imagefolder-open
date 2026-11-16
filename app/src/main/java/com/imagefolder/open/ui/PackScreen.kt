@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -27,11 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -74,6 +77,7 @@ import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.PackUiState
 import com.imagefolder.open.R
 import com.imagefolder.open.core.ImageProcessor
+import com.imagefolder.open.core.SplitCarrierCodec
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
 import kotlinx.coroutines.Dispatchers
@@ -312,6 +316,11 @@ fun PackScreen(
             onCheckedChange = viewModel::setEncrypt,
         )
 
+        SplitPartRow(
+            value = state.partCount,
+            onValueChange = viewModel::setPartCount,
+        )
+
         if (state.encrypt) {
             PasswordField(
                 value = state.password,
@@ -486,6 +495,68 @@ private fun FolderRow(folder: PickedFolder, onRemove: () -> Unit) {
                     contentDescription = stringResource(R.string.remove),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SplitPartRow(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.CallSplit,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.split_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = stringResource(R.string.split_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(
+                onClick = { onValueChange(value - 1) },
+                enabled = value > 1,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Remove,
+                    contentDescription = stringResource(R.string.split_decrease),
+                )
+            }
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 24.dp),
+            )
+            IconButton(
+                onClick = { onValueChange(value + 1) },
+                enabled = value < SplitCarrierCodec.MAX_PARTS,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = stringResource(R.string.split_increase),
+                )
+            }
+        }
+        if (value > 1) {
+            Text(
+                text = stringResource(R.string.split_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -25,6 +25,10 @@ internal data class HiddenHeader(
     val encrypted: Boolean?,
     val compressed: Boolean?,
     val entryCount: Int?,
+    /** 1-based part number for split carriers, null for ordinary items. */
+    val partIndex: Int? = null,
+    /** Total part count for split carriers, null for ordinary items. */
+    val partCount: Int? = null,
 )
 
 internal object HiddenPayloadCodec {
@@ -48,6 +52,8 @@ internal object HiddenPayloadCodec {
             encrypted = (header["enc"] as? JsonPrimitive)?.booleanOrNull,
             compressed = (header["comp"] as? JsonPrimitive)?.booleanOrNull,
             entryCount = (header["entries"] as? JsonPrimitive)?.intOrNull,
+            partIndex = (header["part"] as? JsonPrimitive)?.intOrNull,
+            partCount = (header["parts"] as? JsonPrimitive)?.intOrNull,
         )
     }
 
@@ -59,6 +65,8 @@ internal object HiddenPayloadCodec {
             item.encrypted?.let { put("enc", it) }
             item.compressed?.let { put("comp", it) }
             item.entryCount?.let { put("entries", it) }
+            item.partIndex?.let { put("part", it) }
+            item.partCount?.let { put("parts", it) }
         }
         return header.toString().toByteArray(StandardCharsets.UTF_8)
     }
@@ -78,6 +86,8 @@ internal object HiddenPayloadCodec {
             encrypted = header.encrypted,
             compressed = header.compressed,
             entryCount = header.entryCount,
+            partIndex = header.partIndex,
+            partCount = header.partCount,
         )
     }
 }

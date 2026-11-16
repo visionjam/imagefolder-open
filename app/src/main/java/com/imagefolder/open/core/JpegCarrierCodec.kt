@@ -39,19 +39,23 @@ object JpegCarrierCodec {
         encrypted: Boolean,
         compressed: Boolean,
         entryCount: Int,
-    ): ByteArray {
+    ): ByteArray = insertItem(
+        coverJpeg = coverJpeg,
+        item = HiddenItem(
+            name = name,
+            mime = mime,
+            bytes = envelope,
+            format = "ifv2",
+            encrypted = encrypted,
+            compressed = compressed,
+            entryCount = entryCount,
+        ),
+    )
+
+    /** Inserts one arbitrary hidden item, used by both bundles and split parts. */
+    fun insertItem(coverJpeg: ByteArray, item: HiddenItem): ByteArray {
         require(isJpeg(coverJpeg)) { "封面不是有效的 JPEG" }
-        val payload = HiddenPayloadCodec.encodePayload(
-            HiddenItem(
-                name = name,
-                mime = mime,
-                bytes = envelope,
-                format = "ifv2",
-                encrypted = encrypted,
-                compressed = compressed,
-                entryCount = entryCount,
-            ),
-        )
+        val payload = HiddenPayloadCodec.encodePayload(item)
         val partCount = (payload.size + MAX_PART_DATA - 1) / MAX_PART_DATA
         require(partCount in 1..MAX_PARTS) { "隐藏数据过大，无法写入 JPEG" }
 

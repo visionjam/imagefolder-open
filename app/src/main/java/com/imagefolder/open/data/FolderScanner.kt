@@ -14,6 +14,10 @@ data class ScanHit(
     val format: CarrierFormat,
     val entries: Int,
     val encrypted: Boolean,
+    /** 1-based part number when the image belongs to a split group. */
+    val partIndex: Int? = null,
+    /** Total part count when the image belongs to a split group. */
+    val partCount: Int? = null,
 )
 
 /** Recursively finds images in a SAF tree and probes them without loading payloads. */
@@ -51,6 +55,8 @@ object FolderScanner {
                 format = probe.format,
                 entries = probe.entries,
                 encrypted = probe.encrypted,
+                partIndex = probe.partIndex,
+                partCount = probe.partCount,
             )
         }
         if (!cancelled) onProgress(total, total)
@@ -85,6 +91,8 @@ object FolderScanner {
                 format = probe.format,
                 entries = probe.entries,
                 encrypted = probe.encrypted,
+                partIndex = probe.partIndex,
+                partCount = probe.partCount,
             )
         }
         if (!cancelled) onProgress(total, total)

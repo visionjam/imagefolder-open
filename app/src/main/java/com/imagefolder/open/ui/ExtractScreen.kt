@@ -468,6 +468,12 @@ private fun ScanHitRow(
                             append(" · ")
                             append(stringResource(R.string.scan_encrypted))
                         }
+                        val partIndex = hit.partIndex
+                        val partCount = hit.partCount
+                        if (partIndex != null && partCount != null) {
+                            append(" · ")
+                            append(stringResource(R.string.scan_split_part, partIndex, partCount))
+                        }
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

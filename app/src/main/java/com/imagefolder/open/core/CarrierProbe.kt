@@ -11,6 +11,10 @@ data class CarrierProbeResult(
     val entries: Int,
     val encrypted: Boolean,
     val compressed: Boolean,
+    /** 1-based part number when the carrier is one image of a split group. */
+    val partIndex: Int? = null,
+    /** Total part count when the carrier is one image of a split group. */
+    val partCount: Int? = null,
 )
 
 /**
@@ -66,6 +70,8 @@ object CarrierProbe {
             entries = header?.entryCount ?: count,
             encrypted = header?.encrypted ?: false,
             compressed = header?.compressed ?: false,
+            partIndex = header?.partIndex,
+            partCount = header?.partCount,
         )
     }
 
@@ -120,6 +126,8 @@ object CarrierProbe {
             entries = header?.entryCount ?: 1,
             encrypted = header?.encrypted ?: false,
             compressed = header?.compressed ?: false,
+            partIndex = header?.partIndex,
+            partCount = header?.partCount,
         )
     }
 
@@ -158,6 +166,8 @@ object CarrierProbe {
             entries = header?.entryCount ?: 1,
             encrypted = header?.encrypted ?: false,
             compressed = header?.compressed ?: false,
+            partIndex = header?.partIndex,
+            partCount = header?.partCount,
         )
     }
 

@@ -32,19 +32,23 @@ object WebpCarrierCodec {
         encrypted: Boolean,
         compressed: Boolean,
         entryCount: Int,
-    ): ByteArray {
+    ): ByteArray = insertItem(
+        coverWebp = coverWebp,
+        item = HiddenItem(
+            name = name,
+            mime = mime,
+            bytes = envelope,
+            format = "ifv2",
+            encrypted = encrypted,
+            compressed = compressed,
+            entryCount = entryCount,
+        ),
+    )
+
+    /** Inserts one arbitrary hidden item, used by both bundles and split parts. */
+    fun insertItem(coverWebp: ByteArray, item: HiddenItem): ByteArray {
         require(isWebp(coverWebp)) { "封面不是有效的 WebP" }
-        val payload = HiddenPayloadCodec.encodePayload(
-            HiddenItem(
-                name = name,
-                mime = mime,
-                bytes = envelope,
-                format = "ifv2",
-                encrypted = encrypted,
-                compressed = compressed,
-                entryCount = entryCount,
-            ),
-        )
+        val payload = HiddenPayloadCodec.encodePayload(item)
         val chunkSize = 8L + payload.size + (payload.size and 1)
         val totalSize = coverWebp.size.toLong() + chunkSize
         require(totalSize <= Int.MAX_VALUE) { "隐藏数据过大，无法写入 WebP" }

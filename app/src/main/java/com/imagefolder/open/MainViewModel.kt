@@ -28,10 +28,15 @@ import com.imagefolder.open.core.BundlePaths
 import com.imagefolder.open.core.CarrierCodec
 import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.HiddenFile
+import com.imagefolder.open.core.HiddenItem
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
 import com.imagefolder.open.core.OutputName
 import com.imagefolder.open.core.PngChunkCodec
+import com.imagefolder.open.core.SplitCarrierCodec
+import com.imagefolder.open.core.SplitFormatException
+import com.imagefolder.open.core.SplitIntegrityException
+import com.imagefolder.open.core.SplitPart
 import com.imagefolder.open.data.CacheCleaner
 import com.imagefolder.open.data.FolderBudgetExceededException
 import com.imagefolder.open.data.FolderExporter
@@ -40,6 +45,7 @@ import com.imagefolder.open.data.FolderScanner
 import com.imagefolder.open.data.GallerySaver
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
+import com.imagefolder.open.data.SavedFile
 import com.imagefolder.open.data.ScanHit
 import com.imagefolder.open.data.ShareClassifier
 import com.imagefolder.open.data.SharePlan
@@ -63,6 +69,13 @@ import java.util.Locale
 const val MAX_PACK_MB = 64
 const val MAX_PACK_BYTES = MAX_PACK_MB * 1024L * 1024
 
+/**
+ * Longest cover edge in split mode. Every part repeats the cover, so a
+ * full-resolution photo would multiply the upload size instead of shrinking
+ * it; 1280 px keeps each part small while staying sharp on a phone screen.
+ */
+const val SPLIT_COVER_MAX_SIZE = 1280
+
 class PayloadTooLargeException : Exception()
 
 enum class ThemeMode {
@@ -77,18 +90,31 @@ enum class LanguageMode {
     ENGLISH,
 }
 
-data class GeneratedResult(
+/** One image produced by a pack run; a split run produces 2-9 of them. */
+data class GeneratedPart(
     val fileName: String,
-    /** What the user typed, kept verbatim so the rename field does not fight the sanitiser. */
-    val displayName: String = "",
     val bytes: ByteArray,
     val saved: Boolean = false,
     val savedLocation: String? = null,
+)
+
+data class GeneratedResult(
+    /** What the user typed, kept verbatim so the rename field does not fight the sanitiser. */
+    val displayName: String = "",
+    /** Unsuffixed base name; part names are derived from it. */
+    val baseFileName: String,
+    val parts: List<GeneratedPart>,
     val bundle: Boolean = false,
     val entryCount: Int = 0,
     val failedFiles: Int = 0,
     val mime: String = "image/png",
-)
+) {
+    val fileName: String get() = parts.first().fileName
+    val bytes: ByteArray get() = parts.first().bytes
+    val saved: Boolean get() = parts.all { it.saved }
+    val savedLocation: String? get() = parts.firstOrNull()?.savedLocation
+    val isSplit: Boolean get() = parts.size > 1
+}
 
 data class PackUiState(
     val cover: PickedFile? = null,
@@ -104,6 +130,8 @@ data class PackUiState(
     val outputName: String = "",
     /** True while a picked folder is being described (counting its files). */
     val folderLoading: Boolean = false,
+    /** 1 = one image (default); 2-9 = split carrier images. */
+    val partCount: Int = 1,
     val result: GeneratedResult? = null,
 )
 
@@ -517,17 +545,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pack.update { it.copy(outputName = name) }
     }
 
-    /** Renames the generated image before it is saved. */
+    /** Renames every unsaved part before it is saved. */
     fun renameResult(rawName: String) {
         val current = _pack.value.result ?: return
         if (current.saved) return
-        val extension = current.fileName.substringAfterLast('.', "png")
-        val fallbackStem = current.fileName.substringBeforeLast('.', OutputName.DEFAULT_PREFIX)
+        val extension = current.baseFileName.substringAfterLast('.', "png")
+        val fallbackStem = current.baseFileName.substringBeforeLast('.', OutputName.DEFAULT_PREFIX)
         val renamed = OutputName.build(rawName, extension, fallbackStem)
-        if (renamed == current.fileName && rawName == current.displayName) return
+        if (renamed == current.baseFileName && rawName == current.displayName) return
         _pack.update {
-            it.copy(result = current.copy(fileName = renamed, displayName = rawName))
+            it.copy(
+                result = current.copy(
+                    displayName = rawName,
+                    baseFileName = renamed,
+                    parts = current.parts.mapIndexed { index, part ->
+                        if (part.saved) {
+                            part
+                        } else {
+                            part.copy(
+                                fileName = SplitCarrierCodec.partFileName(
+                                    renamed,
+                                    index,
+                                    current.parts.size,
+                                ),
+                            )
+                        }
+                    },
+                ),
+            )
         }
+    }
+
+    /** 1 keeps the classic single image; 2-9 split the bundle across images. */
+    fun setPartCount(count: Int) {
+        _pack.update { it.copy(partCount = count.coerceIn(1, SplitCarrierCodec.MAX_PARTS)) }
     }
 
     fun setCompress(enabled: Boolean) {
@@ -575,52 +626,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val outcome = withContext(Dispatchers.IO) {
+                    val partCount = state.partCount.coerceIn(1, SplitCarrierCodec.MAX_PARTS)
+                    val split = partCount > 1
                     val carrier = state.cover
                         ?.let { ImageProcessor.detectCarrier(app, it.uri) }
                         ?: CarrierFormat.PNG
-                    val cover = state.cover?.let { ImageProcessor.loadCover(app, it.uri) }
+                    // Split parts repeat the cover, so keep it small: a 4096 px
+                    // photo would make every part bigger than the payload slice.
+                    val cover = state.cover?.let {
+                        ImageProcessor.loadCover(
+                            app,
+                            it.uri,
+                            if (split) SPLIT_COVER_MAX_SIZE else ImageProcessor.MAX_CARRIER_SIZE,
+                        )
+                    }
                     val coverBytes = ImageProcessor.renderHiddenImage(cover, state.note, carrier)
                     val defaultStem = OutputName.DEFAULT_PREFIX +
                         SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                    val fileName = OutputName.build(
+                    val baseFileName = OutputName.build(
                         rawName = state.outputName,
                         extension = carrier.extension,
                         fallbackStem = defaultStem,
                     )
-                    val advanced = state.folders.isNotEmpty() || state.encrypt || state.compress
+                    val displayName = state.outputName.ifBlank {
+                        baseFileName.substringBeforeLast('.')
+                    }
+                    val advanced = state.folders.isNotEmpty() || state.encrypt ||
+                        state.compress || split
 
-                    if (carrier != CarrierFormat.PNG) {
-                        val (entries, failed) = buildEntries(app, state.folders, state.payloads)
-                        if (entries.isEmpty()) {
-                            throw IllegalStateException("没有可打包的内容")
-                        }
-                        val envelope = BundleCodec.pack(
-                            entries = entries,
-                            compress = state.compress,
-                            password = if (state.encrypt) state.password else null,
-                        )
-                        val bytes = CarrierCodec.insertBundle(
-                            coverBytes = coverBytes,
-                            format = carrier,
-                            name = "图片文件夹.zip",
-                            mime = "application/zip",
-                            envelope = envelope,
-                            encrypted = state.encrypt,
-                            compressed = state.compress,
-                            entryCount = entries.size,
-                        )
-                        GeneratedResult(
-                            fileName = fileName,
-                            displayName = state.outputName.ifBlank {
-                                fileName.substringBeforeLast('.')
-                            },
-                            bytes = bytes,
-                            bundle = true,
-                            entryCount = entries.size,
-                            failedFiles = failed,
-                            mime = carrier.mime,
-                        )
-                    } else if (!advanced) {
+                    fun buildResult(
+                        images: List<ByteArray>,
+                        bundle: Boolean,
+                        entries: Int,
+                        failed: Int,
+                    ): GeneratedResult = GeneratedResult(
+                        displayName = displayName,
+                        baseFileName = baseFileName,
+                        parts = images.mapIndexed { index, bytes ->
+                            GeneratedPart(
+                                fileName = SplitCarrierCodec.partFileName(
+                                    baseFileName,
+                                    index,
+                                    images.size,
+                                ),
+                                bytes = bytes,
+                            )
+                        },
+                        bundle = bundle,
+                        entryCount = entries,
+                        failedFiles = failed,
+                        mime = carrier.mime,
+                    )
+
+                    if (!advanced) {
                         val hidden = mutableListOf<HiddenFile>()
                         var simpleBytes = 0L
                         for (picked in state.payloads) {
@@ -636,47 +694,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 bytes = bytes,
                             )
                         }
-                        GeneratedResult(
-                            fileName = fileName,
-                            displayName = state.outputName.ifBlank {
-                                fileName.substringBeforeLast('.')
-                            },
-                            bytes = PngChunkCodec.insertFiles(coverBytes, hidden),
+                        return@withContext buildResult(
+                            images = listOf(PngChunkCodec.insertFiles(coverBytes, hidden)),
                             bundle = false,
-                            entryCount = hidden.size,
-                            mime = carrier.mime,
-                        )
-                    } else {
-                        val (entries, failed) = buildEntries(app, state.folders, state.payloads)
-                        if (entries.isEmpty()) {
-                            throw IllegalStateException("没有可打包的内容")
-                        }
-                        val envelope = BundleCodec.pack(
-                            entries = entries,
-                            compress = state.compress,
-                            password = if (state.encrypt) state.password else null,
-                        )
-                        val bytes = PngChunkCodec.insertBundle(
-                            coverPng = coverBytes,
-                            name = "图片文件夹.zip",
-                            mime = "application/zip",
-                            envelope = envelope,
-                            encrypted = state.encrypt,
-                            compressed = state.compress,
-                            entryCount = entries.size,
-                        )
-                        GeneratedResult(
-                            fileName = fileName,
-                            displayName = state.outputName.ifBlank {
-                                fileName.substringBeforeLast('.')
-                            },
-                            bytes = bytes,
-                            bundle = true,
-                            entryCount = entries.size,
-                            failedFiles = failed,
-                            mime = carrier.mime,
+                            entries = hidden.size,
+                            failed = 0,
                         )
                     }
+
+                    val (entries, failed) = buildEntries(app, state.folders, state.payloads)
+                    if (entries.isEmpty()) {
+                        throw IllegalStateException("没有可打包的内容")
+                    }
+                    val envelope = BundleCodec.pack(
+                        entries = entries,
+                        compress = state.compress,
+                        password = if (state.encrypt) state.password else null,
+                    )
+                    val payloads = if (split) {
+                        SplitCarrierCodec.split(envelope, partCount)
+                    } else {
+                        listOf(envelope)
+                    }
+                    val images = payloads.mapIndexed { index, payload ->
+                        CarrierCodec.insertItem(
+                            coverBytes = coverBytes,
+                            format = carrier,
+                            item = HiddenItem(
+                                name = "图片文件夹.zip",
+                                mime = "application/zip",
+                                bytes = payload,
+                                format = if (split) SplitCarrierCodec.FORMAT else "ifv2",
+                                encrypted = state.encrypt,
+                                compressed = state.compress,
+                                entryCount = entries.size,
+                                partIndex = if (split) index + 1 else null,
+                                partCount = if (split) payloads.size else null,
+                            ),
+                        )
+                    }
+                    buildResult(
+                        images = images,
+                        bundle = true,
+                        entries = entries.size,
+                        failed = failed,
+                    )
                 }
                 _pack.update { it.copy(generating = false, result = outcome) }
                 if (outcome.failedFiles > 0) {
@@ -700,16 +762,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (result.saved) return
         viewModelScope.launch {
             val app = getApplication<Application>()
-            try {
-                val saved = withContext(Dispatchers.IO) {
-                    gallerySaver.save(result.bytes, result.fileName, result.mime)
+            val saved = mutableMapOf<Int, SavedFile>()
+            var failure: Throwable? = null
+            withContext(Dispatchers.IO) {
+                result.parts.forEachIndexed { index, part ->
+                    if (part.saved) return@forEachIndexed
+                    try {
+                        saved[index] = gallerySaver.save(part.bytes, part.fileName, result.mime)
+                    } catch (t: Throwable) {
+                        if (failure == null) failure = t
+                    }
                 }
+            }
+            if (saved.isNotEmpty()) {
                 _pack.update { state ->
-                    state.copy(result = state.result?.copy(saved = true, savedLocation = saved.location))
+                    val current = state.result ?: return@update state
+                    state.copy(
+                        result = current.copy(
+                            parts = current.parts.mapIndexed { index, part ->
+                                val entry = saved[index]
+                                if (entry == null) {
+                                    part
+                                } else {
+                                    part.copy(saved = true, savedLocation = entry.location)
+                                }
+                            },
+                        ),
+                    )
                 }
-                showMessage(localizedContext().getString(R.string.msg_saved_one, saved.location, saved.displayName))
-            } catch (t: Throwable) {
-                showMessage(localizedContext().getString(R.string.msg_save_failed, t.message ?: t.javaClass.simpleName))
+                val first = saved.values.first()
+                if (result.parts.size > 1) {
+                    showMessage(
+                        localizedContext().getString(
+                            R.string.msg_saved_parts,
+                            saved.size,
+                            first.location,
+                        ),
+                    )
+                } else {
+                    showMessage(
+                        localizedContext().getString(
+                            R.string.msg_saved_one,
+                            first.location,
+                            first.displayName,
+                        ),
+                    )
+                }
+            }
+            failure?.let {
+                showMessage(
+                    localizedContext().getString(
+                        R.string.msg_save_failed,
+                        it.message ?: it.javaClass.simpleName,
+                    ),
+                )
             }
         }
     }
@@ -992,11 +1098,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 passwordError = false,
                             )
                         }
-                        if (outcome.items.isEmpty()) {
-                            showMessage(localizedContext().getString(R.string.msg_no_hidden_files))
-                        } else if (outcome.failedBundles > 0) {
-                            showMessage(
-                                localizedContext().getString(R.string.msg_some_files_failed, outcome.failedBundles),
+                        when {
+                            outcome.splitGaps.isNotEmpty() ->
+                                showMessage(splitGapMessage(outcome.splitGaps))
+                            outcome.items.isEmpty() ->
+                                showMessage(localizedContext().getString(R.string.msg_no_hidden_files))
+                            outcome.failedBundles > 0 -> showMessage(
+                                localizedContext().getString(
+                                    R.string.msg_some_files_failed,
+                                    outcome.failedBundles,
+                                ),
                             )
                         }
                     }
@@ -1331,10 +1442,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private sealed interface ScanOutcome {
-        data class Success(val items: List<ExtractItem>, val failedBundles: Int) : ScanOutcome
+        data class Success(
+            val items: List<ExtractItem>,
+            val failedBundles: Int,
+            val splitGaps: List<SplitGap> = emptyList(),
+        ) : ScanOutcome
+
         data object PasswordRequired : ScanOutcome
         data object WrongPassword : ScanOutcome
     }
+
+    /** Parts of one split group that the current selection does not cover. */
+    private data class SplitGap(val missing: List<Int>, val count: Int)
+
+    /** One split part found in a source image, plus the JSON header metadata. */
+    private data class CollectedSplitPart(
+        val sourceName: String,
+        val part: SplitPart,
+        val encrypted: Boolean?,
+    )
 
     private fun scanSources(
         app: Application,
@@ -1342,62 +1468,133 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         password: String?,
     ): ScanOutcome {
         val results = mutableListOf<ExtractItem>()
+        val splitParts = mutableListOf<CollectedSplitPart>()
         var failedBundles = 0
+
+        fun appendEntries(entries: List<BundleEntry>, sourceName: String) {
+            for (entry in entries) {
+                val isDirectory = entry.path.endsWith("/")
+                val fileName = entry.path.trimEnd('/').substringAfterLast('/').ifEmpty { "文件夹" }
+                val mime = if (isDirectory) {
+                    null
+                } else {
+                    UriUtils.guessMime(fileName) ?: "application/octet-stream"
+                }
+                results += ExtractItem(
+                    name = fileName,
+                    relativePath = entry.path,
+                    mime = mime,
+                    bytes = entry.bytes,
+                    sourceName = sourceName,
+                    isDirectory = isDirectory,
+                    archiveFormat = if (isDirectory) {
+                        null
+                    } else {
+                        ArchiveExtractor.detect(fileName, entry.bytes)
+                            .takeIf { it != ArchiveFormat.UNKNOWN }
+                    },
+                )
+            }
+        }
+
         for (source in sources) {
             val bytes = runCatching { UriUtils.readBytes(app, source.uri) }.getOrNull() ?: continue
             val hiddenItems = runCatching { CarrierCodec.extractItems(bytes) }
                 .getOrDefault(emptyList())
             for (item in hiddenItems) {
-                if (item.format == "ifv2") {
-                    if (item.encrypted == true && password.isNullOrEmpty()) {
-                        return ScanOutcome.PasswordRequired
-                    }
-                    val entries = try {
-                        BundleCodec.unpack(item.bytes, password)
-                    } catch (e: InvalidPasswordException) {
-                        return ScanOutcome.WrongPassword
-                    } catch (e: BundleFormatException) {
-                        failedBundles++
-                        continue
-                    }
-                    for (entry in entries) {
-                        val isDirectory = entry.path.endsWith("/")
-                        val fileName = entry.path.trimEnd('/').substringAfterLast('/')
-                            .ifEmpty { "文件夹" }
-                        val mime = if (isDirectory) {
+                when (item.format) {
+                    SplitCarrierCodec.FORMAT -> {
+                        val part = try {
+                            SplitCarrierCodec.parse(item.bytes)
+                        } catch (e: SplitFormatException) {
+                            failedBundles++
                             null
-                        } else {
-                            UriUtils.guessMime(fileName) ?: "application/octet-stream"
+                        } catch (e: SplitIntegrityException) {
+                            failedBundles++
+                            null
                         }
+                        if (part != null) {
+                            splitParts += CollectedSplitPart(source.name, part, item.encrypted)
+                        }
+                    }
+                    "ifv2" -> {
+                        if (item.encrypted == true && password.isNullOrEmpty()) {
+                            return ScanOutcome.PasswordRequired
+                        }
+                        val entries = try {
+                            BundleCodec.unpack(item.bytes, password)
+                        } catch (e: InvalidPasswordException) {
+                            return ScanOutcome.WrongPassword
+                        } catch (e: BundleFormatException) {
+                            failedBundles++
+                            null
+                        }
+                        if (entries != null) appendEntries(entries, source.name)
+                    }
+                    else -> {
                         results += ExtractItem(
-                            name = fileName,
-                            relativePath = entry.path,
-                            mime = mime,
-                            bytes = entry.bytes,
+                            name = item.name,
+                            relativePath = item.name,
+                            mime = item.mime,
+                            bytes = item.bytes,
                             sourceName = source.name,
-                            isDirectory = isDirectory,
-                            archiveFormat = if (isDirectory) {
-                                null
-                            } else {
-                                ArchiveExtractor.detect(fileName, entry.bytes)
-                                    .takeIf { it != ArchiveFormat.UNKNOWN }
-                            },
+                            archiveFormat = ArchiveExtractor.detect(item.name, item.bytes)
+                                .takeIf { it != ArchiveFormat.UNKNOWN },
                         )
                     }
-                } else {
-                    results += ExtractItem(
-                        name = item.name,
-                        relativePath = item.name,
-                        mime = item.mime,
-                        bytes = item.bytes,
-                        sourceName = source.name,
-                        archiveFormat = ArchiveExtractor.detect(item.name, item.bytes)
-                            .takeIf { it != ArchiveFormat.UNKNOWN },
-                    )
                 }
             }
         }
-        return ScanOutcome.Success(results, failedBundles)
+
+        // Split parts are useless alone: group them by the random group id and
+        // only unpack groups that are complete. Gaps are reported to the user.
+        val gaps = mutableListOf<SplitGap>()
+        val groups = LinkedHashMap<String, MutableList<CollectedSplitPart>>()
+        for (collected in splitParts) {
+            groups.getOrPut(collected.part.header.groupId) { mutableListOf() } += collected
+        }
+        for (group in groups.values) {
+            val first = group.first()
+            val unique = group.distinctBy { it.part.header.index }
+            val missing = (0 until first.part.header.count)
+                .filter { index -> unique.none { it.part.header.index == index } }
+            if (missing.isNotEmpty()) {
+                gaps += SplitGap(missing, first.part.header.count)
+                continue
+            }
+            if (first.encrypted == true && password.isNullOrEmpty()) {
+                return ScanOutcome.PasswordRequired
+            }
+            val envelope = try {
+                SplitCarrierCodec.reassemble(unique.map { it.part })
+            } catch (e: SplitIntegrityException) {
+                failedBundles++
+                continue
+            } catch (e: SplitFormatException) {
+                failedBundles++
+                continue
+            }
+            val entries = try {
+                BundleCodec.unpack(envelope, password)
+            } catch (e: InvalidPasswordException) {
+                return ScanOutcome.WrongPassword
+            } catch (e: BundleFormatException) {
+                failedBundles++
+                null
+            }
+            if (entries != null) appendEntries(entries, unique.first().sourceName)
+        }
+        return ScanOutcome.Success(results, failedBundles, gaps)
+    }
+
+    private fun splitGapMessage(gaps: List<SplitGap>): String {
+        val context = localizedContext()
+        if (gaps.size > 1) {
+            return context.getString(R.string.msg_split_incomplete_multi, gaps.size)
+        }
+        val gap = gaps.first()
+        val missing = gap.missing.joinToString(", ") { (it + 1).toString() }
+        return context.getString(R.string.msg_split_incomplete, missing, gap.count)
     }
 
     private companion object {

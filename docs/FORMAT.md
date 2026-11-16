@@ -12,10 +12,12 @@ JSON 头字段：
 | --- | --- |
 | `name` | 文件名（必填） |
 | `mime` | MIME 类型（可选） |
-| `format` | `ifv2` 表示 v0.2 封装；旧格式无此字段 |
+| `format` | `ifv2` 表示 v0.2 封装；`ifsp` 表示分卷图种；旧格式无此字段 |
 | `enc` | 是否加密（布尔） |
 | `comp` | 是否压缩（布尔） |
 | `entries` | 条目数量（整数，含目录） |
+| `part` | 分卷序号，从 1 开始（仅 `ifsp`） |
+| `parts` | 分卷总份数，1–9（仅 `ifsp`） |
 
 ## PNG 载体
 
@@ -64,6 +66,36 @@ payload         ZIP 数据；加密时为 AES-GCM 密文 + 16 字节 tag
 
 密码错误或数据被篡改时 GCM 认证失败，抛出 `InvalidPasswordException`。
 
+## 分卷图种（IFSP）
+
+打包时选择「分卷输出 2–9 张」后，整个 `IFB2` 封装会被等分成若干段，每段写入一张独立的载体图片。每张图片本身仍是正常图片，载荷部分为：
+
+```
+<JSON 头> 0x00 <IFSP 段头 + 数据分片>
+```
+
+IFSP 段头固定 60 字节，全部大端序：
+
+```
+"IFSP"          4 字节 magic
+version         1 字节 (1)
+flags           1 字节 (0，保留)
+index           1 字节（从 0 开始）
+count           1 字节（1–9）
+totalLength     4 字节（完整 IFB2 封装的长度）
+offset          4 字节（本分片在封装中的起始偏移）
+groupId         8 字节（随机组号，同一组的所有份相同）
+envelopeSha256 32 字节（完整封装的 SHA-256）
+sliceCrc32      4 字节（本分片的 CRC32）
+slice           sliceLength 字节
+```
+
+- 分片大小 = `ceil(totalLength / count)`；最后一份可能更短
+- 提取时按 `groupId` 分组，检查序号 0..count-1 是否齐全，逐份校验 CRC32，拼回后再校验 SHA-256
+- 份数超过封装字节数时自动降为「每份至少 1 字节」，不会产生空份
+- 分卷图片的载体格式仍跟随表图（PNG 用 `tpWj`、JPEG 用 APP15、WebP 用 `IFBW`）
+- 只有本应用能识别 `ifsp`；原版与其他工具会把每份当成一个不完整的 `.zip`
+
 ## JPEG 载体
 
 JPEG 使用 APP15（`0xFFEF`）段承载载荷，插入在第一个 SOS 扫描之前。APP 段会被所有 JPEG 解码器跳过，像素数据不受影响。
@@ -111,5 +143,6 @@ chunk payload 直接为：
 | --- | --- | --- | --- |
 | PNG / 原版或本应用基础模式 | 逐个文件 chunk | ✅ | ✅ |
 | PNG / 本应用高级模式 | IFB2（ZIP，可加密） | ✅ | ❌（会当作一个 `.zip` 文件导出） |
+| PNG / 本应用分卷 | tpWj + IFSP 分片 | ✅ | ❌（每份是一个不完整的 `.zip`） |
 | JPEG / 本应用 | APP15 分段 + IFB2 | ✅ | ❌ 不识别 |
 | WebP / 本应用 | IFBW chunk + IFB2 | ✅ | ❌ 不识别 |

@@ -7,8 +7,8 @@
 修改 `app/build.gradle.kts`：
 
 ```kotlin
-versionCode = 11          // 每次发版 +1，v0.10.0 为 11
-versionName = "0.10.0"    // 与 tag、CHANGELOG 和两份 README 保持一致
+versionCode = 12          // 每次发版 +1，v1.0.0 为 12
+versionName = "1.0.0"     // 与 tag、CHANGELOG 和两份 README 保持一致
 ```
 
 `versionCode` 必须严格递增，否则已安装的用户无法覆盖升级。同步更新 `CHANGELOG.md` 与 `README.md` / `README.zh-CN.md` 顶部的当前版本号。

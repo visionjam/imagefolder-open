@@ -224,6 +224,7 @@ fun AboutScreen(
 
         SectionTitle(R.string.about_section_tech)
         ExpandableInfoSection(R.string.about_format_title, R.string.about_format)
+        ExpandableInfoSection(R.string.about_split_title, R.string.about_split)
         ExpandableInfoSection(R.string.about_carrier_title, R.string.about_carrier)
         ExpandableInfoSection(R.string.about_archives_title, R.string.about_archives)
         ExpandableInfoSection(R.string.about_open_source_title, R.string.about_open_source)

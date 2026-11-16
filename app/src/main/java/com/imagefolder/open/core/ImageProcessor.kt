@@ -27,13 +27,22 @@ object ImageProcessor {
     /** Longest edge used for on-screen previews. */
     const val PREVIEW_SIZE = 720
 
-    /** Decodes the cover image with EXIF orientation applied and a software-backed buffer. */
-    fun loadCover(context: Context, uri: Uri): Bitmap {
+    /**
+     * Decodes the cover image with EXIF orientation applied and a software-backed buffer.
+     *
+     * [maxSize] caps the longest edge. Split mode passes a smaller value
+     * because every part repeats the cover image.
+     */
+    fun loadCover(
+        context: Context,
+        uri: Uri,
+        maxSize: Int = MAX_CARRIER_SIZE,
+    ): Bitmap {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
         return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             decoder.isMutableRequired = true
-            applyTargetSize(decoder, info.size, MAX_CARRIER_SIZE)
+            applyTargetSize(decoder, info.size, maxSize)
         }
     }
 

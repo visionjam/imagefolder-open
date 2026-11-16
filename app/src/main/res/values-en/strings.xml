@@ -206,4 +206,19 @@
     <string name="msg_cache_cleared">Cache cleared: %1$s</string>
     <string name="about_secure_title">Block screenshots / recents preview</string>
     <string name="about_secure_summary">Hides app content from screenshots, screen recording and the recents thumbnail. Off by default.</string>
+    <!-- v1.0.0 -->
+    <string name="split_title">Split output (1–9 images)</string>
+    <string name="split_summary">Split one carrier into several images for platforms with per-image size limits.</string>
+    <string name="split_hint">Split mode uses the newer format. Every part repeats the cover, so the cover is capped at 1280 px.</string>
+    <string name="split_decrease">Fewer parts</string>
+    <string name="split_increase">More parts</string>
+    <string name="generated_split_summary">%1$d parts, %2$s total</string>
+    <string name="generated_split_hint">Select every image of the group when extracting; order does not matter.</string>
+    <string name="save_all_parts">Save all %1$d images</string>
+    <string name="msg_saved_parts">Saved %1$d images to %2$s</string>
+    <string name="scan_split_part">Part %1$d/%2$d</string>
+    <string name="msg_split_incomplete">This is a split carrier: part(s) %1$s of %2$d are missing. Select every image of the group and try again.</string>
+    <string name="msg_split_incomplete_multi">%1$d split groups are incomplete. Select every image of each group.</string>
+    <string name="about_split_title">Split carriers</string>
+    <string name="about_split">When packing you can split the bundle across 1–9 images. Every image is a normal picture carrying one slice and a random group id. Select the whole group when extracting and the app verifies and joins the parts. Split parts use an IFSP header that only this app understands.</string>
 </resources>

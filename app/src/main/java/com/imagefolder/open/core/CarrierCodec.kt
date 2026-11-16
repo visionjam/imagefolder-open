@@ -62,6 +62,17 @@ object CarrierCodec {
         )
     }
 
+    /** Inserts one pre-built hidden item (bundle envelope or split part). */
+    fun insertItem(
+        coverBytes: ByteArray,
+        format: CarrierFormat,
+        item: HiddenItem,
+    ): ByteArray = when (format) {
+        CarrierFormat.PNG -> PngChunkCodec.insertItem(coverBytes, item)
+        CarrierFormat.JPEG -> JpegCarrierCodec.insertItem(coverBytes, item)
+        CarrierFormat.WEBP -> WebpCarrierCodec.insertItem(coverBytes, item)
+    }
+
     fun extractItems(bytes: ByteArray): List<HiddenItem> = when (detect(bytes)) {
         CarrierFormat.PNG -> PngChunkCodec.extractItems(bytes)
         CarrierFormat.JPEG -> JpegCarrierCodec.extractItems(bytes)

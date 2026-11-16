@@ -28,6 +28,10 @@ data class HiddenItem(
     val encrypted: Boolean? = null,
     val compressed: Boolean? = null,
     val entryCount: Int? = null,
+    /** 1-based part number when this item is one image of a split carrier. */
+    val partIndex: Int? = null,
+    /** Total part count when this item is one image of a split carrier. */
+    val partCount: Int? = null,
 )
 
 /**
@@ -88,6 +92,25 @@ object PngChunkCodec {
         compressed: Boolean,
         entryCount: Int,
         chunkName: String = CHUNK_NAME,
+    ): ByteArray = insertItem(
+        coverPng = coverPng,
+        item = HiddenItem(
+            name = name,
+            mime = mime,
+            bytes = envelope,
+            format = "ifv2",
+            encrypted = encrypted,
+            compressed = compressed,
+            entryCount = entryCount,
+        ),
+        chunkName = chunkName,
+    )
+
+    /** Inserts one arbitrary hidden item, used by both bundles and split parts. */
+    fun insertItem(
+        coverPng: ByteArray,
+        item: HiddenItem,
+        chunkName: String = CHUNK_NAME,
     ): ByteArray {
         require(chunkName.length == 4 && chunkName.all { it.code in 0x20..0x7E }) {
             "chunk name must be four printable ASCII characters"
@@ -96,17 +119,7 @@ object PngChunkCodec {
         val idatOffset = firstChunkOffset(coverPng, "IDAT")
             ?: throw IllegalArgumentException("PNG 缺少 IDAT 数据块")
 
-        val payload = HiddenPayloadCodec.encodePayload(
-            HiddenItem(
-                name = name,
-                mime = mime,
-                bytes = envelope,
-                format = "ifv2",
-                encrypted = encrypted,
-                compressed = compressed,
-                entryCount = entryCount,
-            ),
-        )
+        val payload = HiddenPayloadCodec.encodePayload(item)
 
         val out = ByteArrayOutputStream(coverPng.size + payload.size + CHUNK_OVERHEAD)
         out.write(coverPng, 0, idatOffset)

@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.10.0** · [Changelog](CHANGELOG.md)
+> Current version: **v1.0.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -25,6 +25,10 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 - **Folders**: add whole directories through the system picker; directory structure and empty folders are preserved
 - **Compression**: ZIP Deflate to reduce payload size
 - **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (600,000 iterations); a password is required for extraction. Older bundles are read with the iteration count stored in their header.
+- **Split carriers**: split one carrier across 1–9 images for chat apps and image hosts that cap per-file size
+  - Every part is a normal, viewable image carrying one slice and a random group id; split mode uses the newer format
+  - The cover is capped at 1280 px in split mode so each part does not repeat a huge photo
+  - Select the whole group when extracting; order does not matter. Missing, duplicate or corrupt parts are reported
 - **Extract**: select multiple PNG / JPEG / WebP images and automatically detect hidden content
   - Preview images directly
   - Save one item or all items to the gallery
@@ -52,10 +56,11 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 | --- | --- | --- |
 | PNG, no compression / encryption / folders | ✅ | ✅ extractable |
 | PNG, compressed / encrypted / with folders | ✅ | ❌ only sees a `.zip` payload |
+| Split carriers (IFSP, any container) | ✅ | ❌ each part looks like a truncated `.zip` |
 | JPEG (any mode) | ✅ | ❌ not recognized |
 | WebP (any mode) | ✅ | ❌ not recognized |
 
-PNG output without advanced features still writes the original per-file `tpWj` chunks, so basic usage is fully interoperable; advanced features use the v0.2 `IFB2` envelope. JPEG/WebP carriers use private segments/chunks in their containers and can only be read by this app.
+PNG output without advanced features still writes the original per-file `tpWj` chunks, so basic usage is fully interoperable; advanced features use the v0.2 `IFB2` envelope. Split carriers cut that envelope into slices, each prefixed with an `IFSP` header (group id, part number, total length, SHA-256, CRC32); see [docs/FORMAT.md](docs/FORMAT.md). JPEG/WebP carriers use private segments/chunks in their containers and can only be read by this app.
 
 ## Privacy
 
@@ -138,9 +143,10 @@ Unit tests cover:
 - Split-volume grouping (`.z01`… + `.zip`, `.zip.001`…, `.7z.001`…, `.rar` + `.r00`…, `.partN.rar`) and missing-part reporting
 - RAR backend injection and libarchive error mapping (encrypted, solid RAR4, truncated, unsupported features)
 - Folder traversal and share classification / merge deduplication
+- Split carriers: split / reassemble, arbitrary order, missing-part reporting, mixed groups, duplicates, CRC and SHA-256 validation, and round-trips through PNG / JPEG / WebP
 - Corrupt data and invalid input
 
-Currently **79 JVM unit tests + 16 on-device tests**.
+Currently **115 JVM unit tests + 16 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 
@@ -161,6 +167,7 @@ app/src/main/java/com/imagefolder/open/
 ├── core/CarrierProbe.kt           # streaming probe: reads headers, skips payloads
 ├── core/HiddenPayloadCodec.kt     # shared JSON header + payload
 ├── core/BundleCodec.kt            # ZIP + AES-256-GCM envelope
+├── core/SplitCarrierCodec.kt      # split carriers: split, reassemble, verify, naming
 ├── core/BundlePaths.kt            # safe, unique archive paths
 ├── core/ArchiveExtractor.kt       # ZIP/7z/TAR/GZ/BZ2/XZ/RAR extraction, split volumes
 ├── core/RarExtractor.kt           # RAR backend interface (injectable for JVM tests)
@@ -190,6 +197,7 @@ app/src/main/java/com/imagefolder/open/
 - Passwords are not stored; a lost password cannot be recovered
 - Encrypted RAR (passwords/encrypted headers), solid RAR4, ISO / CAB / DEB / RPM and ZSTD are not supported
 - Split archives must all be present in the current extraction results (same batch of images / envelopes); missing parts are not searched on the device
+- Split carriers repeat the cover in every part, so they help when the payload is much larger than the cover; if the cover alone is near the platform limit, splitting does not make individual images smaller
 - Image payloads are saved to `Pictures/图片文件夹`; other files go to `Download/图片文件夹`. Use "Export to folder" for the full directory structure
 - Switching between Release and debug builds requires an uninstall because the signatures differ
 

@@ -206,4 +206,19 @@
     <string name="msg_cache_cleared">已清理缓存：%1$s</string>
     <string name="about_secure_title">防截屏 / 遮挡最近任务</string>
     <string name="about_secure_summary">开启后系统截图、录屏与最近任务缩略图都不会显示本应用内容。默认关闭，需要时再开。</string>
+    <!-- v1.0.0 -->
+    <string name="split_title">分卷输出（1–9 张）</string>
+    <string name="split_summary">把一份图种拆成多张，适合有单图大小限制的平台。</string>
+    <string name="split_hint">分卷使用新版格式；每份都会重复表图，所以分卷时表图最长边限制为 1280 px。</string>
+    <string name="split_decrease">减少份数</string>
+    <string name="split_increase">增加份数</string>
+    <string name="generated_split_summary">共 %1$d 份，合计 %2$s</string>
+    <string name="generated_split_hint">提取时把同一组图片全部选中即可，顺序不限。</string>
+    <string name="save_all_parts">保存全部 %1$d 张</string>
+    <string name="msg_saved_parts">已保存 %1$d 张到 %2$s</string>
+    <string name="scan_split_part">分卷 %1$d/%2$d</string>
+    <string name="msg_split_incomplete">这是分卷图种，还缺第 %1$s 份（共 %2$d 份）。请把同一组图片全部选中后再提取。</string>
+    <string name="msg_split_incomplete_multi">有 %1$d 组分卷图种不完整，请把每组的全部图片一起选中。</string>
+    <string name="about_split_title">分卷图种</string>
+    <string name="about_split">打包时可以选择拆成 1–9 张：每张都是可正常查看的图片，各带一段数据和一个随机组号。提取时把同一组图片一起选中，应用会校验完整性并自动拼回。分卷使用 IFSP 段头，只有本应用能识别。</string>
 </resources>

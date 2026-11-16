@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
@@ -33,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.imagefolder.open.GeneratedResult
 import com.imagefolder.open.R
@@ -90,7 +95,7 @@ fun GeneratedImageScreen(
 
     fun share() {
         scope.launch {
-            runCatching { shareGeneratedImage(context, result) }
+            runCatching { shareGeneratedImages(context, result) }
                 .onFailure {
                     snackbarHostState.showSnackbar(
                         context.getString(
@@ -165,11 +170,12 @@ fun GeneratedImageScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            val previewBytes = result.bytes
             @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
-            val bitmap by produceState<Bitmap?>(null, result.bytes) {
+            val bitmap by produceState<Bitmap?>(null, previewBytes) {
                 // Downsampled: the generated carrier can be a full-size photo.
                 value = withContext(Dispatchers.IO) {
-                    ImageProcessor.decodePreviewBytes(result.bytes, GENERATED_PREVIEW_SIZE)
+                    ImageProcessor.decodePreviewBytes(previewBytes, GENERATED_PREVIEW_SIZE)
                 }
             }
 
@@ -201,11 +207,71 @@ fun GeneratedImageScreen(
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                text = formatSize(result.bytes.size.toLong()),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+            if (result.isSplit) {
+                Text(
+                    text = stringResource(
+                        R.string.generated_split_summary,
+                        result.parts.size,
+                        formatSize(result.parts.sumOf { it.bytes.size.toLong() }),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.generated_split_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    result.parts.forEach { part ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Image,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = part.fileName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = formatSize(part.bytes.size.toLong()),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (part.saved) {
+                                    Text(
+                                        text = stringResource(R.string.saved_badge),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = formatSize(result.bytes.size.toLong()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             if (result.bundle) {
                 Text(
                     text = stringResource(R.string.generated_entries, result.entryCount),
@@ -230,7 +296,13 @@ fun GeneratedImageScreen(
             ) {
                 Icon(Icons.Outlined.Save, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.save_to_gallery))
+                Text(
+                    if (result.isSplit) {
+                        stringResource(R.string.save_all_parts, result.parts.size)
+                    } else {
+                        stringResource(R.string.save_to_gallery)
+                    },
+                )
             }
 
             OutlinedButton(
