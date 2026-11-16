@@ -91,7 +91,14 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [d
 
 ## 下载
 
-从 [Releases](https://github.com/visionjam/imagefolder-open/releases) 下载最新签名的 APK。
+每个版本发两个签名包，按手机选一个：
+
+| 文件 | 内容 | 什么时候用 |
+| --- | --- | --- |
+| `imagefolder-open-vX.Y.Z-arm64-v8a.apk` | 只含 64 位 ARM（约 5.5 MB） | 近几年的大多数手机，体积更小 |
+| `imagefolder-open-vX.Y.Z-universal.apk` | `arm64-v8a` + `armeabi-v7a`（约 7.4 MB） | 老的 32 位 ARM 设备 |
+
+两个包用同一把密钥签名，可以互相覆盖升级，也能覆盖旧版本。每个包都附带 `.sha256` 文件。
 
 ## 构建
 

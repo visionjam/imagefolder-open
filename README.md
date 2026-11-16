@@ -94,7 +94,15 @@ v0.2 ZIP / encrypted payloads use the `IFB2` envelope in the same payload. See [
 
 ## Download
 
-Download the latest signed APK from [Releases](https://github.com/visionjam/imagefolder-open/releases).
+Every release ships two signed APKs — pick one:
+
+| File | Contents | When to use |
+| --- | --- | --- |
+| `imagefolder-open-vX.Y.Z-arm64-v8a.apk` | 64-bit ARM only (~5.5 MB) | Almost every phone from the last few years; smaller download |
+| `imagefolder-open-vX.Y.Z-universal.apk` | `arm64-v8a` + `armeabi-v7a` (~7.4 MB) | Older 32-bit ARM devices |
+
+Both are signed with the same key, so they upgrade over each other and over
+older releases. Each APK is published with a `.sha256` file.
 
 ## Build
 
