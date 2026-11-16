@@ -118,12 +118,17 @@ Unit tests cover:
 - Reading the original layout and interoperability fixtures from the Python reference implementation
 - JPEG APP15 segment write / extract and automatic splitting above 64KB
 - WebP RIFF chunk write / extract, odd-sized chunks and padding
+- Streaming carrier probing for PNG / JPEG / WebP: metadata, legacy chunk counting, payload skipping, truncated and malformed input
 - ZIP directory structure, compression and empty-folder preservation
 - AES-256-GCM encryption / decryption, wrong passwords, random salt / nonce
 - Path traversal and malicious ZIP protection
+- Archive detection and extraction for ZIP / 7z / TAR / GZ / BZ2 / XZ
+- Split-volume grouping (`.z01`… + `.zip`, `.zip.001`…, `.7z.001`…, `.rar` + `.r00`…, `.partN.rar`) and missing-part reporting
+- RAR backend injection and libarchive error mapping (encrypted, solid RAR4, truncated, unsupported features)
+- Folder traversal and share classification / merge deduplication
 - Corrupt data and invalid input
 
-Currently **45 JVM unit tests + 6 on-device tests**.
+Currently **79 JVM unit tests + 16 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 
@@ -137,21 +142,27 @@ See [docs/RELEASING.md](docs/RELEASING.md) for the release process.
 
 ```
 app/src/main/java/com/imagefolder/open/
-├── core/PngChunkCodec.kt      # tpWj chunk I/O (PNG carrier)
-├── core/JpegCarrierCodec.kt   # APP15 segment I/O (JPEG carrier)
-├── core/WebpCarrierCodec.kt   # IFBW chunk I/O (WebP carrier)
-├── core/CarrierCodec.kt       # carrier detection and dispatch
-├── core/HiddenPayloadCodec.kt # shared JSON header + payload
-├── core/BundleCodec.kt        # ZIP + AES-256-GCM envelope
-├── core/BundlePaths.kt        # safe, unique archive paths
-├── core/ArchiveExtractor.kt   # ZIP/7z/TAR/GZ/BZ2/XZ extraction
-├── core/ImageProcessor.kt     # cover decoding, note drawing, PNG/JPEG/WebP encoding
-├── data/FolderReader.kt       # SAF directory traversal, structure preservation
-├── data/FolderExporter.kt     # export with directory structure
-├── data/GallerySaver.kt       # MediaStore saving
-├── data/UriUtils.kt           # content URI reading
-├── MainViewModel.kt           # state and business orchestration
-└── ui/                        # Compose Material 3 UI
+├── core/PngChunkCodec.kt          # tpWj chunk I/O (PNG carrier)
+├── core/JpegCarrierCodec.kt       # APP15 segment I/O (JPEG carrier)
+├── core/WebpCarrierCodec.kt       # IFBW chunk I/O (WebP carrier)
+├── core/CarrierCodec.kt           # carrier detection and dispatch
+├── core/CarrierProbe.kt           # streaming probe: reads headers, skips payloads
+├── core/HiddenPayloadCodec.kt     # shared JSON header + payload
+├── core/BundleCodec.kt            # ZIP + AES-256-GCM envelope
+├── core/BundlePaths.kt            # safe, unique archive paths
+├── core/ArchiveExtractor.kt       # ZIP/7z/TAR/GZ/BZ2/XZ/RAR extraction, split volumes
+├── core/RarExtractor.kt           # RAR backend interface (injectable for JVM tests)
+├── core/LibarchiveRarExtractor.kt # RAR4/RAR5 through libarchive
+├── core/ImageProcessor.kt         # cover decoding, note drawing, PNG/JPEG/WebP encoding
+├── data/FolderReader.kt           # SAF directory traversal, structure preservation
+├── data/FolderScanner.kt          # recursive scan for images with hidden content
+├── data/FolderExporter.kt         # export with directory structure
+├── data/GallerySaver.kt           # MediaStore saving
+├── data/ImageFiles.kt             # pure File-tree walker for the all-files browser
+├── data/ShareClassifier.kt        # split shared files into extract / pack
+├── data/UriUtils.kt               # content URI reading
+├── MainViewModel.kt               # state and business orchestration
+└── ui/                            # Compose Material 3 UI
 ```
 
 ## Known limitations

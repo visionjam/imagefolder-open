@@ -7,11 +7,11 @@
 修改 `app/build.gradle.kts`：
 
 ```kotlin
-versionCode = 3
-versionName = "0.3.0"
+versionCode = 10          // 每次发版 +1，v0.9.0 为 10
+versionName = "0.9.0"     // 与 tag、CHANGELOG 和两份 README 保持一致
 ```
 
-同步更新 `CHANGELOG.md`。
+`versionCode` 必须严格递增，否则已安装的用户无法覆盖升级。同步更新 `CHANGELOG.md` 与 `README.md` / `README.zh-CN.md` 顶部的当前版本号。
 
 ## 2. 测试
 
@@ -28,7 +28,7 @@ versionName = "0.3.0"
 ```
 
 产物：`app/build/outputs/apk/release/app-release-unsigned.apk`。
-单 ABI 构建的 APK 命名请带上 ABI，例如 `imagefolder-open-vX.Y.Z-arm64-v8a.apk`。
+发布资产按 ABI 命名，与 v0.9.0 保持一致：双 ABI 用 `imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk`，单 ABI 用 `imagefolder-open-vX.Y.Z-arm64-v8a.apk`。
 
 release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outputs/mapping/release/mapping.txt` 一并归档，便于解析线上崩溃堆栈。
 
@@ -38,6 +38,10 @@ release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outpu
 
 ```bash
 BT=$ANDROID_HOME/build-tools/35.0.0
+KEYSTORE=/path/to/imagefolder-release.jks
+KEY_ALIAS=imagefolder
+PASS_FILE=/path/to/keystore-password.txt   # 一行密码；不要写进命令行或日志
+
 # 16 KB page-size devices: keep shared libraries 16 KB aligned.
 $BT/zipalign -f -P 16 4 \
   app/build/outputs/apk/release/app-release-unsigned.apk \
@@ -45,21 +49,24 @@ $BT/zipalign -f -P 16 4 \
 
 $BT/apksigner sign \
   --ks "$KEYSTORE" \
-  --ks-pass "pass:$KEYSTORE_PASSWORD" \
-  --key-pass "pass:$KEYSTORE_PASSWORD" \
+  --ks-pass "file:$PASS_FILE" \
+  --key-pass "file:$PASS_FILE" \
   --ks-key-alias "$KEY_ALIAS" \
-  --out dist/imagefolder-open-vX.Y.Z-arm64-v8a.apk \
+  --out dist/imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk \
   dist/app-release-aligned.apk
 
-$BT/apksigner verify --print-certs dist/imagefolder-open-vX.Y.Z.apk
+$BT/apksigner verify --print-certs \
+  dist/imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk
 ```
 
-minSdk 29 时默认使用 v3 签名即可。
+minSdk 29 时默认使用 v3 签名即可。密码一律用 `file:` 传入，不要用 `pass:` 或明文写在命令行/日志里；本项目 keystore 密码与 key 密码相同，共用一个文件即可。
 
 ## 5. 校验文件
 
 ```bash
-sha256sum dist/imagefolder-open-vX.Y.Z.apk > dist/imagefolder-open-vX.Y.Z.apk.sha256
+cd dist
+sha256sum imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk \
+  > imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk.sha256
 ```
 
 `.sha256` 文件内只写文件名，不要包含本机绝对路径。
@@ -80,6 +87,7 @@ sha256sum dist/imagefolder-open-vX.Y.Z.apk > dist/imagefolder-open-vX.Y.Z.apk.sh
 - [ ] asset digest 与本地 SHA-256 一致
 - [ ] Release notes 写明兼容性变化
 - [ ] 真机安装 Release APK 并启动验证
+- [ ] R8 mapping 与 `.apk.sha256` 一并归档，便于解析崩溃堆栈与复核完整性
 - [ ] 若界面有变化，更新 `docs/screenshots/` 与 README
 
 ## CI 说明

@@ -118,12 +118,17 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [d
 - 读取原版布局与 Python 参考实现生成的互操作样张
 - JPEG APP15 分段写入/提取、超过 64KB 的自动拆分
 - WebP RIFF chunk 写入/提取、奇数长度 chunk 与填充
+- PNG / JPEG / WebP 流式载体探测：元数据、旧格式 chunk 计数、跳过载荷、截断与畸形输入
 - ZIP 目录结构、压缩与空目录保留
 - AES-256-GCM 加解密、错误密码、随机盐/nonce
 - 路径穿越与恶意 ZIP 防护
+- ZIP / 7z / TAR / GZ / BZ2 / XZ 格式识别与解压
+- 分卷分组（`.z01`… + `.zip`、`.zip.001`…、`.7z.001`…、`.rar` + `.r00`…、`.partN.rar`）与缺失分卷报告
+- RAR 后端注入与 libarchive 错误映射（加密、固实 RAR4、截断、不支持特性）
+- 文件夹遍历、分享分类与合并去重
 - 损坏数据与非法输入
 
-当前共 **45 个 JVM 单元测试 + 6 个真机用例**。
+当前共 **79 个 JVM 单元测试 + 16 个真机用例**。
 
 真机端到端测试（需要连接设备）：
 
@@ -137,21 +142,27 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [d
 
 ```
 app/src/main/java/com/imagefolder/open/
-├── core/PngChunkCodec.kt      # tpWj chunk 读写（PNG 载体）
-├── core/JpegCarrierCodec.kt   # APP15 分段读写（JPEG 载体）
-├── core/WebpCarrierCodec.kt   # IFBW chunk 读写（WebP 载体）
-├── core/CarrierCodec.kt       # 载体检测与统一入口
-├── core/HiddenPayloadCodec.kt # 共享 JSON 头 + 数据载荷
-├── core/BundleCodec.kt        # ZIP + AES-256-GCM 封装
-├── core/BundlePaths.kt        # 安全、唯一的归档路径
-├── core/ArchiveExtractor.kt   # ZIP/7z/TAR/GZ/BZ2/XZ 解压
-├── core/ImageProcessor.kt     # 封面解码、备注绘制、PNG/JPEG/WebP 编码
-├── data/FolderReader.kt       # SAF 目录枚举、结构保留
-├── data/FolderExporter.kt     # 按目录结构导出
-├── data/GallerySaver.kt       # MediaStore 保存
-├── data/UriUtils.kt           # 内容 URI 读取
-├── MainViewModel.kt           # 状态与业务编排
-└── ui/                        # Compose Material 3 界面
+├── core/PngChunkCodec.kt          # tpWj chunk 读写（PNG 载体）
+├── core/JpegCarrierCodec.kt       # APP15 分段读写（JPEG 载体）
+├── core/WebpCarrierCodec.kt       # IFBW chunk 读写（WebP 载体）
+├── core/CarrierCodec.kt           # 载体检测与统一入口
+├── core/CarrierProbe.kt           # 流式探测：只读头部、跳过载荷
+├── core/HiddenPayloadCodec.kt     # 共享 JSON 头 + 数据载荷
+├── core/BundleCodec.kt            # ZIP + AES-256-GCM 封装
+├── core/BundlePaths.kt            # 安全、唯一的归档路径
+├── core/ArchiveExtractor.kt       # ZIP/7z/TAR/GZ/BZ2/XZ/RAR 解压与分卷
+├── core/RarExtractor.kt           # RAR 后端接口（单测可注入）
+├── core/LibarchiveRarExtractor.kt # 经 libarchive 解压 RAR4/RAR5
+├── core/ImageProcessor.kt         # 封面解码、备注绘制、PNG/JPEG/WebP 编码
+├── data/FolderReader.kt           # SAF 目录枚举、结构保留
+├── data/FolderScanner.kt          # 递归扫描含隐藏内容的图片
+├── data/FolderExporter.kt         # 按目录结构导出
+├── data/GallerySaver.kt           # MediaStore 保存
+├── data/ImageFiles.kt             # 内置浏览器用的纯 File 目录遍历
+├── data/ShareClassifier.kt        # 分享文件分类到提取/打包
+├── data/UriUtils.kt               # 内容 URI 读取
+├── MainViewModel.kt               # 状态与业务编排
+└── ui/                            # Compose Material 3 界面
 ```
 
 ## 已知限制
