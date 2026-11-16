@@ -3,7 +3,6 @@ package com.imagefolder.open.ui
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,9 +24,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Folder
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,6 +76,8 @@ import com.imagefolder.open.ExtractItem
 import com.imagefolder.open.ExtractUiState
 import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.R
+import com.imagefolder.open.core.ImageProcessor
+import com.imagefolder.open.data.ScanHit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -107,269 +111,240 @@ fun ExtractScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+    // A single LazyColumn: unpacking an APK produces thousands of entries, and
+    // laying out every row of a scrolling Column at once froze the UI.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = stringResource(R.string.extract_section),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = stringResource(R.string.extract_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (state.sources.isEmpty()) {
-            Text(
-                text = stringResource(R.string.extract_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.extract_selected, state.sources.size),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        OutlinedButton(
-            onClick = {
-                imagePicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.pick_extract))
-        }
-
-        OutlinedButton(
-            onClick = {
-                if (allFilesAccess) {
-                    showBrowser = true
-                } else {
-                    scanPicker.launch(null)
-                }
-            },
-            enabled = !state.scanning,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.scan_folder))
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (allFilesAccess) {
-                Text(
-                    text = stringResource(R.string.all_files_granted),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                TextButton(onClick = { scanPicker.launch(null) }) {
-                    Text(stringResource(R.string.use_system_picker))
-                }
-            } else {
-                Text(
-                    text = stringResource(R.string.all_files_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.all_files_grant))
-                }
-            }
-        } else {
-            Text(
-                text = stringResource(R.string.all_files_android_11),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (state.scanning) {
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = stringResource(
-                        R.string.scanning_progress,
-                        state.scanScanned,
-                        state.scanTotal,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = stringResource(R.string.extract_section),
+                    style = MaterialTheme.typography.titleMedium,
                 )
-                if (state.scanTotal > 0) {
-                    LinearProgressIndicator(
-                        progress = { state.scanScanned.toFloat() / state.scanTotal },
-                        modifier = Modifier.fillMaxWidth(),
+                Text(
+                    text = stringResource(R.string.extract_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = if (state.sources.isEmpty()) {
+                        stringResource(R.string.extract_empty)
+                    } else {
+                        stringResource(R.string.extract_selected, state.sources.size)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (state.sources.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+
+        item {
+            OutlinedButton(
+                onClick = {
+                    imagePicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
-                } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-                TextButton(onClick = viewModel::cancelScan) {
-                    Text(stringResource(R.string.cancel))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.pick_extract))
+            }
+        }
+
+        item {
+            OutlinedButton(
+                onClick = {
+                    if (allFilesAccess) {
+                        showBrowser = true
+                    } else {
+                        scanPicker.launch(null)
+                    }
+                },
+                enabled = !state.scanning,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.scan_folder))
+            }
+        }
+
+        item { AllFilesAccessBlock(allFilesAccess = allFilesAccess, onUseSystemPicker = { scanPicker.launch(null) }) }
+
+        if (state.scanning) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(
+                            R.string.scanning_progress,
+                            state.scanScanned,
+                            state.scanTotal,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (state.scanTotal > 0) {
+                        LinearProgressIndicator(
+                            progress = { state.scanScanned.toFloat() / state.scanTotal },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(onClick = viewModel::cancelScan) {
+                        Text(stringResource(R.string.cancel))
+                    }
                 }
             }
         } else if (state.scanHits.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.scan_results, state.scanHits.size),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            OutlinedButton(
-                onClick = viewModel::addScanHitsToExtract,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.scan_add_all))
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.scanHits.forEach { hit ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.scan_results, state.scanHits.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = viewModel::selectAllScanHits) {
+                            Text(stringResource(R.string.scan_select_all))
+                        }
+                        TextButton(onClick = viewModel::clearScanSelection) {
+                            Text(stringResource(R.string.scan_select_none))
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = viewModel::addSelectedScanHitsToExtract,
+                            enabled = state.selectedScanUris.isNotEmpty(),
+                            modifier = Modifier.weight(1f),
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.PhotoLibrary,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                            Text(
+                                stringResource(
+                                    R.string.scan_add_selected,
+                                    state.selectedScanUris.size,
+                                ),
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = hit.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = buildString {
-                                        append(hit.format.name)
-                                        append(" · ")
-                                        append(
-                                            stringResource(
-                                                R.string.scan_entries,
-                                                hit.entries,
-                                            ),
-                                        )
-                                        if (hit.encrypted) {
-                                            append(" · ")
-                                            append(stringResource(R.string.scan_encrypted))
-                                        }
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::addScanHitsToExtract,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.scan_add_all))
                         }
                     }
                 }
             }
+            items(state.scanHits) { hit ->
+                ScanHitRow(
+                    hit = hit,
+                    selected = hit.uri.toString() in state.selectedScanUris,
+                    onToggle = { viewModel.toggleScanHit(hit.uri) },
+                )
+            }
         } else if (state.scanError != null) {
-            Text(
-                text = state.scanError,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        } else if (state.scanCompleted && state.scanHits.isEmpty()) {
-            Text(
-                text = stringResource(R.string.scan_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            item {
+                Text(
+                    text = state.scanError.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        } else if (state.scanCompleted) {
+            item {
+                Text(
+                    text = stringResource(R.string.scan_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
-        Button(
-            onClick = { viewModel.extract() },
-            enabled = state.sources.isNotEmpty() && !state.extracting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-        ) {
-            if (state.extracting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(stringResource(R.string.extract_running))
-            } else {
-                Icon(Icons.Outlined.Unarchive, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.extract_button))
+        item {
+            Button(
+                onClick = { viewModel.extract() },
+                enabled = state.sources.isNotEmpty() && !state.extracting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                if (state.extracting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.extract_running))
+                } else {
+                    Icon(Icons.Outlined.Unarchive, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.extract_button))
+                }
             }
         }
 
         if (state.results.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.extract_results),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.extract_results),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = stringResource(R.string.extract_result_count, state.results.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = viewModel::saveAllExtracted) {
+                            Text(stringResource(R.string.save_all))
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { exportPicker.launch(null) },
+                        enabled = !state.exporting,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (state.exporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.exporting))
+                        } else {
+                            Icon(Icons.Outlined.SaveAlt, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.export_to_folder))
+                        }
+                    }
+                }
+            }
+            itemsIndexed(state.results) { index, item ->
+                ExtractedRow(
+                    item = item,
+                    unpacking = state.unpackingIndex == index,
+                    onPreview = { previewItem = item },
+                    onSave = { viewModel.saveExtracted(index) },
+                    onOpen = { openFile(context, item) },
+                    onUnpack = { viewModel.unpackArchive(index) },
                 )
-                TextButton(onClick = viewModel::saveAllExtracted) {
-                    Text(stringResource(R.string.save_all))
-                }
-            }
-
-            OutlinedButton(
-                onClick = { exportPicker.launch(null) },
-                enabled = !state.exporting,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (state.exporting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.exporting))
-                } else {
-                    Icon(Icons.Outlined.SaveAlt, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.export_to_folder))
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.results.forEachIndexed { index, item ->
-                    ExtractedRow(
-                        item = item,
-                        unpacking = state.unpackingIndex == index,
-                        onPreview = { previewItem = item },
-                        onSave = { viewModel.saveExtracted(index) },
-                        onOpen = { openFile(context, item) },
-                        onUnpack = { viewModel.unpackArchive(index) },
-                    )
-                }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        item { Spacer(Modifier.height(8.dp)) }
     }
 
     previewItem?.let { item ->
@@ -402,6 +377,103 @@ fun ExtractScreen(
             onConfirm = viewModel::unpackWithPassword,
             onDismiss = viewModel::cancelUnpackPassword,
         )
+    }
+}
+
+@Composable
+private fun AllFilesAccessBlock(
+    allFilesAccess: Boolean,
+    onUseSystemPicker: () -> Unit,
+) {
+    val context = LocalContext.current
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (allFilesAccess) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.all_files_granted),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                TextButton(onClick = onUseSystemPicker) {
+                    Text(stringResource(R.string.use_system_picker))
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.all_files_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.all_files_grant))
+                }
+            }
+        }
+    } else {
+        Text(
+            text = stringResource(R.string.all_files_android_11),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ScanHitRow(
+    hit: ScanHit,
+    selected: Boolean,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(checked = selected, onCheckedChange = { onToggle() })
+            Icon(
+                imageVector = Icons.Outlined.PhotoLibrary,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = hit.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = buildString {
+                        append(hit.format.name)
+                        append(" · ")
+                        append(stringResource(R.string.scan_entries, hit.entries))
+                        if (hit.encrypted) {
+                            append(" · ")
+                            append(stringResource(R.string.scan_encrypted))
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -532,12 +604,9 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
             ) {
                 @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
                 val bitmap by produceState<Bitmap?>(null, item.bytes) {
-                    val loaded = withContext(Dispatchers.IO) {
-                        runCatching {
-                            BitmapFactory.decodeByteArray(item.bytes, 0, item.bytes.size)
-                        }.getOrNull()
+                    value = withContext(Dispatchers.IO) {
+                        ImageProcessor.decodePreviewBytes(item.bytes, PREVIEW_MAX_SIZE)
                     }
-                    value = loaded
                 }
                 Text(
                     text = item.name,
@@ -633,6 +702,9 @@ private fun PasswordPromptDialog(
         },
     )
 }
+
+/** Preview decode target for extracted images shown in a dialog. */
+private const val PREVIEW_MAX_SIZE = 1080
 
 private fun openFile(context: Context, item: ExtractItem) {
     val uri = item.savedUri ?: return

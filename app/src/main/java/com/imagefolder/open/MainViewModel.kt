@@ -3,9 +3,11 @@ package com.imagefolder.open
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.LocaleList
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -28,7 +30,9 @@ import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
+import com.imagefolder.open.core.OutputName
 import com.imagefolder.open.core.PngChunkCodec
+import com.imagefolder.open.data.CacheCleaner
 import com.imagefolder.open.data.FolderBudgetExceededException
 import com.imagefolder.open.data.FolderExporter
 import com.imagefolder.open.data.FolderReader
@@ -75,6 +79,8 @@ enum class LanguageMode {
 
 data class GeneratedResult(
     val fileName: String,
+    /** What the user typed, kept verbatim so the rename field does not fight the sanitiser. */
+    val displayName: String = "",
     val bytes: ByteArray,
     val saved: Boolean = false,
     val savedLocation: String? = null,
@@ -94,6 +100,10 @@ data class PackUiState(
     val password: String = "",
     val passwordConfirm: String = "",
     val generating: Boolean = false,
+    /** User supplied output file name; blank keeps the Tank_<timestamp> default. */
+    val outputName: String = "",
+    /** True while a picked folder is being described (counting its files). */
+    val folderLoading: Boolean = false,
     val result: GeneratedResult? = null,
 )
 
@@ -123,6 +133,8 @@ data class ExtractUiState(
     val scanScanned: Int = 0,
     val scanTotal: Int = 0,
     val scanHits: List<ScanHit> = emptyList(),
+    /** URIs of scan hits the user ticked for extraction. */
+    val selectedScanUris: Set<String> = emptySet(),
     val scanCompleted: Boolean = false,
     val scanError: String? = null,
 )
@@ -149,11 +161,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile
     private var scanGeneration = 0
 
+    private val _cacheBytes = MutableStateFlow(0L)
+    val cacheBytes: StateFlow<Long> = _cacheBytes.asStateFlow()
+
+    init {
+        // Payload copies (shared/ and shared-in/) used to survive forever if the
+        // user only ever shared once, because the only cleanup ran inside the
+        // share path itself. Wipe them on every process start.
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                CacheCleaner.pruneOnStartup(
+                    getApplication<Application>().cacheDir,
+                    System.currentTimeMillis(),
+                )
+            }
+            refreshCacheInfo()
+        }
+    }
+
     private val _allFilesAccess = MutableStateFlow(hasAllFilesAccess())
     val allFilesAccess: StateFlow<Boolean> = _allFilesAccess.asStateFlow()
 
     private val _compatMode = MutableStateFlow(prefs.getBoolean(KEY_COMPAT_MODE, false))
     val compatMode: StateFlow<Boolean> = _compatMode.asStateFlow()
+
+    /** Opt-in FLAG_SECURE: hides the app in screenshots, recording and recents. */
+    private val _secureWindow = MutableStateFlow(prefs.getBoolean(KEY_SECURE_WINDOW, false))
+    val secureWindow: StateFlow<Boolean> = _secureWindow.asStateFlow()
 
     private val _themeMode = MutableStateFlow(
         runCatching {
@@ -184,6 +218,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _message.value = text
     }
 
+    /**
+     * Resolves string resources against the *in-app* language.
+     *
+     * `Application.getString` uses the system configuration, so a user who set
+     * the app to Chinese on an English device got a Chinese UI with English
+     * snackbars. Mirror `MainActivity.attachBaseContext` here instead.
+     */
+    private fun localizedContext(): Context {
+        val base = getApplication<Application>()
+        val tag = when (_languageMode.value) {
+            LanguageMode.CHINESE -> "zh-CN"
+            LanguageMode.ENGLISH -> "en"
+            LanguageMode.SYSTEM -> return base
+        }
+        return runCatching {
+            val configuration = Configuration(base.resources.configuration)
+            configuration.setLocales(LocaleList.forLanguageTags(tag))
+            base.createConfigurationContext(configuration)
+        }.getOrDefault(base)
+    }
+
     fun clearMessage() {
         _message.value = null
     }
@@ -206,7 +261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun handleSharedUris(uris: List<Uri>) {
         val distinctUris = uris.distinct()
         if (distinctUris.isEmpty()) {
-            showMessage(getApplication<Application>().getString(R.string.msg_share_no_files))
+            showMessage(localizedContext().getString(R.string.msg_share_no_files))
             return
         }
         viewModelScope.launch {
@@ -223,7 +278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val skipped = distinctUris.size - imported.size
             if (imported.isEmpty()) {
-                showMessage(app.getString(R.string.msg_share_no_files))
+                showMessage(localizedContext().getString(R.string.msg_share_no_files))
                 return@launch
             }
             val shared = withContext(Dispatchers.IO) {
@@ -279,9 +334,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 selectTab(0)
                 showMessage(
                     when {
-                        added == 0 -> app.getString(R.string.msg_share_none_added)
-                        skipped > 0 -> app.getString(R.string.msg_share_added_skipped, added, skipped)
-                        else -> app.getString(R.string.msg_share_added, added)
+                        added == 0 -> localizedContext().getString(R.string.msg_share_none_added)
+                        skipped > 0 -> localizedContext().getString(R.string.msg_share_added_skipped, added, skipped)
+                        else -> localizedContext().getString(R.string.msg_share_added, added)
                     },
                 )
             }
@@ -303,7 +358,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val added = addPayloadsDirect(pending.packSources)
         selectTab(0)
         if (added > 0) {
-            showMessage(getApplication<Application>().getString(R.string.msg_share_added, added))
+            showMessage(localizedContext().getString(R.string.msg_share_added, added))
         }
     }
 
@@ -368,6 +423,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putBoolean(KEY_COMPAT_MODE, enabled).apply()
     }
 
+    fun setSecureWindow(enabled: Boolean) {
+        _secureWindow.value = enabled
+        prefs.edit().putBoolean(KEY_SECURE_WINDOW, enabled).apply()
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
@@ -390,7 +450,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (file != null) {
                 _pack.update { it.copy(cover = file) }
             } else {
-                showMessage(getApplication<Application>().getString(R.string.msg_extract_failed, "无法读取封面"))
+                showMessage(localizedContext().getString(R.string.msg_extract_failed, "无法读取封面"))
             }
         }
     }
@@ -422,19 +482,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
-            val folder = withContext(Dispatchers.IO) {
-                runCatching { FolderReader.describe(app, uri) }.getOrNull()
-            }
-            if (folder == null) {
-                showMessage(app.getString(R.string.msg_extract_failed, "无法读取文件夹"))
-            } else {
-                _pack.update { state ->
-                    if (state.folders.any { it.uri == folder.uri }) {
-                        state
-                    } else {
-                        state.copy(folders = state.folders + folder)
+            _pack.update { it.copy(folderLoading = true) }
+            try {
+                val folder = withContext(Dispatchers.IO) {
+                    runCatching { FolderReader.describe(app, uri) }.getOrNull()
+                }
+                if (folder == null) {
+                    showMessage(localizedContext().getString(R.string.msg_extract_failed, "无法读取文件夹"))
+                } else {
+                    _pack.update { state ->
+                        if (state.folders.any { it.uri == folder.uri }) {
+                            state
+                        } else {
+                            state.copy(folders = state.folders + folder)
+                        }
                     }
                 }
+            } finally {
+                _pack.update { it.copy(folderLoading = false) }
             }
         }
     }
@@ -445,6 +510,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNote(note: String) {
         _pack.update { it.copy(note = note) }
+    }
+
+    /** Blank keeps the default `Tank_<timestamp>` name. */
+    fun setOutputName(name: String) {
+        _pack.update { it.copy(outputName = name) }
+    }
+
+    /** Renames the generated image before it is saved. */
+    fun renameResult(rawName: String) {
+        val current = _pack.value.result ?: return
+        if (current.saved) return
+        val extension = current.fileName.substringAfterLast('.', "png")
+        val fallbackStem = current.fileName.substringBeforeLast('.', OutputName.DEFAULT_PREFIX)
+        val renamed = OutputName.build(rawName, extension, fallbackStem)
+        if (renamed == current.fileName && rawName == current.displayName) return
+        _pack.update {
+            it.copy(result = current.copy(fileName = renamed, displayName = rawName))
+        }
     }
 
     fun setCompress(enabled: Boolean) {
@@ -473,16 +556,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val state = _pack.value
         val app = getApplication<Application>()
         if (state.payloads.isEmpty() && state.folders.isEmpty()) {
-            showMessage(app.getString(R.string.msg_need_payload))
+            showMessage(localizedContext().getString(R.string.msg_need_payload))
             return
         }
         if (state.encrypt) {
             if (state.password.isEmpty()) {
-                showMessage(app.getString(R.string.password_required))
+                showMessage(localizedContext().getString(R.string.password_required))
                 return
             }
             if (state.password != state.passwordConfirm) {
-                showMessage(app.getString(R.string.password_mismatch))
+                showMessage(localizedContext().getString(R.string.password_mismatch))
                 return
             }
         }
@@ -497,9 +580,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         ?: CarrierFormat.PNG
                     val cover = state.cover?.let { ImageProcessor.loadCover(app, it.uri) }
                     val coverBytes = ImageProcessor.renderHiddenImage(cover, state.note, carrier)
-                    val fileName = "Tank_" +
-                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) +
-                        "." + carrier.extension
+                    val defaultStem = OutputName.DEFAULT_PREFIX +
+                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                    val fileName = OutputName.build(
+                        rawName = state.outputName,
+                        extension = carrier.extension,
+                        fallbackStem = defaultStem,
+                    )
                     val advanced = state.folders.isNotEmpty() || state.encrypt || state.compress
 
                     if (carrier != CarrierFormat.PNG) {
@@ -524,6 +611,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = bytes,
                             bundle = true,
                             entryCount = entries.size,
@@ -548,6 +638,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = PngChunkCodec.insertFiles(coverBytes, hidden),
                             bundle = false,
                             entryCount = hidden.size,
@@ -574,6 +667,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = bytes,
                             bundle = true,
                             entryCount = entries.size,
@@ -584,17 +680,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _pack.update { it.copy(generating = false, result = outcome) }
                 if (outcome.failedFiles > 0) {
-                    showMessage(app.getString(R.string.msg_some_files_failed, outcome.failedFiles))
+                    showMessage(localizedContext().getString(R.string.msg_some_files_failed, outcome.failedFiles))
                 }
             } catch (e: PayloadTooLargeException) {
                 _pack.update { it.copy(generating = false) }
-                showMessage(app.getString(R.string.msg_payload_too_large, MAX_PACK_MB))
+                showMessage(localizedContext().getString(R.string.msg_payload_too_large, MAX_PACK_MB))
             } catch (e: FolderBudgetExceededException) {
                 _pack.update { it.copy(generating = false) }
-                showMessage(app.getString(R.string.msg_payload_too_large, MAX_PACK_MB))
+                showMessage(localizedContext().getString(R.string.msg_payload_too_large, MAX_PACK_MB))
             } catch (t: Throwable) {
                 _pack.update { it.copy(generating = false) }
-                showMessage(app.getString(R.string.msg_generate_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_generate_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -611,9 +707,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _pack.update { state ->
                     state.copy(result = state.result?.copy(saved = true, savedLocation = saved.location))
                 }
-                showMessage(app.getString(R.string.msg_saved_one, saved.location, saved.displayName))
+                showMessage(localizedContext().getString(R.string.msg_saved_one, saved.location, saved.displayName))
             } catch (t: Throwable) {
-                showMessage(app.getString(R.string.msg_save_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_save_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -624,6 +720,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAllFilesAccess() {
         _allFilesAccess.value = hasAllFilesAccess()
+        refreshCacheInfo()
+    }
+
+    /** Recomputes the size of the app's own cache directory. */
+    fun refreshCacheInfo() {
+        viewModelScope.launch {
+            _cacheBytes.value = withContext(Dispatchers.IO) {
+                CacheCleaner.totalBytes(getApplication<Application>().cacheDir)
+            }
+        }
+    }
+
+    /** Drops every transient file the app wrote into cacheDir. */
+    fun clearCache() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val freed = withContext(Dispatchers.IO) {
+                CacheCleaner.clear(app.cacheDir)
+            }
+            refreshCacheInfo()
+            showMessage(localizedContext().getString(R.string.msg_cache_cleared, formatCacheSize(freed)))
+        }
+    }
+
+    private fun formatCacheSize(bytes: Long): String = when {
+        bytes <= 0 -> "0 KB"
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
     }
 
     private fun hasAllFilesAccess(): Boolean =
@@ -644,7 +769,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun scanDirectory(root: File) {
         if (!_allFilesAccess.value) {
-            showMessage(getApplication<Application>().getString(R.string.msg_all_files_required))
+            showMessage(localizedContext().getString(R.string.msg_all_files_required))
             return
         }
         startScan { report, continueScan ->
@@ -674,9 +799,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val hits = withContext(Dispatchers.IO) {
+                    // Progress used to be pushed for every single file, which
+                    // flooded the state flow on folders with thousands of
+                    // images; 120 ms is well below the visible threshold.
+                    var lastReport = 0L
                     scan(
                         { scanned, total ->
-                            if (generation == scanGeneration) {
+                            val now = System.currentTimeMillis()
+                            val due = now - lastReport >= 120L || scanned == 0 || scanned >= total
+                            if (due && generation == scanGeneration) {
+                                lastReport = now
                                 _extract.update { state ->
                                     state.copy(scanScanned = scanned, scanTotal = total)
                                 }
@@ -690,6 +822,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             scanning = false,
                             scanHits = hits,
+                            selectedScanUris = hits.mapTo(mutableSetOf()) { hit ->
+                                hit.uri.toString()
+                            },
                             scanScanned = it.scanTotal,
                             scanCompleted = true,
                             scanError = null,
@@ -704,7 +839,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             scanning = false,
                             scanCompleted = false,
-                            scanError = app.getString(
+                            scanError = localizedContext().getString(
                                 R.string.msg_scan_failed,
                                 e.message ?: e.javaClass.simpleName,
                             ),
@@ -728,6 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 scanning = false,
                 scanCompleted = false,
                 scanError = null,
+                selectedScanUris = emptySet(),
             )
         }
     }
@@ -735,6 +871,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addScanHitsToExtract() {
         val hits = _extract.value.scanHits
         if (hits.isEmpty()) return
+        addScanHits(hits)
+    }
+
+    /** Adds only the ticked scan results, so a folder scan is not all-or-nothing. */
+    fun addSelectedScanHitsToExtract() {
+        val state = _extract.value
+        val selected = state.scanHits.filter { it.uri.toString() in state.selectedScanUris }
+        if (selected.isEmpty()) {
+            showMessage(localizedContext().getString(R.string.msg_scan_none_selected))
+            return
+        }
+        addScanHits(selected)
+    }
+
+    fun toggleScanHit(uri: Uri) {
+        val key = uri.toString()
+        _extract.update { state ->
+            val selected = state.selectedScanUris
+            state.copy(
+                selectedScanUris = if (key in selected) selected - key else selected + key,
+            )
+        }
+    }
+
+    fun selectAllScanHits() {
+        _extract.update { state ->
+            state.copy(selectedScanUris = state.scanHits.mapTo(mutableSetOf()) { it.uri.toString() })
+        }
+    }
+
+    fun clearScanSelection() {
+        _extract.update { it.copy(selectedScanUris = emptySet()) }
+    }
+
+    private fun addScanHits(hits: List<ScanHit>) {
         val files = hits.map { hit ->
             PickedFile(
                 uri = hit.uri,
@@ -747,13 +918,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _extract.update {
             it.copy(
                 scanHits = emptyList(),
+                selectedScanUris = emptySet(),
                 scanCompleted = false,
                 scanTotal = 0,
                 scanScanned = 0,
                 scanError = null,
             )
         }
-        showMessage(getApplication<Application>().getString(R.string.msg_scan_added, files.size))
+        showMessage(localizedContext().getString(R.string.msg_scan_added, files.size))
     }
 
     fun setExtractSources(uris: List<Uri>) {
@@ -788,7 +960,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val state = _extract.value
         val app = getApplication<Application>()
         if (state.sources.isEmpty()) {
-            showMessage(app.getString(R.string.msg_need_sources))
+            showMessage(localizedContext().getString(R.string.msg_need_sources))
             return
         }
         if (state.extracting) return
@@ -821,17 +993,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                         if (outcome.items.isEmpty()) {
-                            showMessage(app.getString(R.string.msg_no_hidden_files))
+                            showMessage(localizedContext().getString(R.string.msg_no_hidden_files))
                         } else if (outcome.failedBundles > 0) {
                             showMessage(
-                                app.getString(R.string.msg_some_files_failed, outcome.failedBundles),
+                                localizedContext().getString(R.string.msg_some_files_failed, outcome.failedBundles),
                             )
                         }
                     }
                 }
             } catch (t: Throwable) {
                 _extract.update { it.copy(extracting = false, hasExtracted = true) }
-                showMessage(app.getString(R.string.msg_extract_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_extract_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -849,7 +1021,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val item = _extract.value.results.getOrNull(index) ?: return
         val app = getApplication<Application>()
         if (item.isDirectory) {
-            showMessage(app.getString(R.string.msg_directory_skipped))
+            showMessage(localizedContext().getString(R.string.msg_directory_skipped))
             return
         }
         if (item.savedUri != null) return
@@ -865,9 +1037,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         },
                     )
                 }
-                showMessage(app.getString(R.string.msg_saved_one, saved.location, saved.displayName))
+                showMessage(localizedContext().getString(R.string.msg_saved_one, saved.location, saved.displayName))
             } catch (t: Throwable) {
-                showMessage(app.getString(R.string.msg_save_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_save_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -899,10 +1071,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             if (savedUris.isNotEmpty()) {
-                showMessage(app.getString(R.string.msg_saved_to, savedUris.size, location ?: ""))
+                showMessage(localizedContext().getString(R.string.msg_saved_to, savedUris.size, location ?: ""))
             }
             if (failures > 0) {
-                showMessage(app.getString(R.string.msg_save_failed, "$failures 个文件"))
+                showMessage(localizedContext().getString(R.string.msg_save_failed, "$failures 个文件"))
             }
         }
     }
@@ -925,16 +1097,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     FolderExporter.export(app, treeUri, items)
                 }
                 _extract.update { it.copy(exporting = false) }
+                refreshCacheInfo()
                 if (result.failed > 0) {
                     showMessage(
-                        app.getString(R.string.msg_export_partial, result.fileCount, result.failed),
+                        localizedContext().getString(R.string.msg_export_partial, result.fileCount, result.failed),
                     )
                 } else {
-                    showMessage(app.getString(R.string.msg_exported, result.fileCount))
+                    showMessage(localizedContext().getString(R.string.msg_exported, result.fileCount))
                 }
             } catch (t: Throwable) {
                 _extract.update { it.copy(exporting = false) }
-                showMessage(app.getString(R.string.msg_export_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_export_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -946,11 +1119,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (item.isDirectory) return
         val format = item.archiveFormat
         if (format == null) {
-            showMessage(app.getString(R.string.msg_unpack_failed, "不是压缩包"))
+            showMessage(localizedContext().getString(R.string.msg_unpack_failed, "不是压缩包"))
             return
         }
         if (!ArchiveExtractor.isSupported(format)) {
-            showMessage(app.getString(R.string.msg_unpack_unsupported, format.label))
+            showMessage(localizedContext().getString(R.string.msg_unpack_unsupported, format.label))
             return
         }
         if (state.unpackingIndex != null) return
@@ -962,7 +1135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (splitGroup != null && splitGroup.missing.isNotEmpty()) {
             val listed = splitGroup.missing.take(6).joinToString(", ") +
                 if (splitGroup.missing.size > 6) " …" else ""
-            showMessage(app.getString(R.string.msg_missing_parts, listed))
+            showMessage(localizedContext().getString(R.string.msg_missing_parts, listed))
             return
         }
 
@@ -975,14 +1148,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
-                    if (splitGroup != null) {
+                // Building the result rows is part of the unpack cost: an APK
+                // can carry thousands of entries, and mapping them on the main
+                // thread was a visible freeze right after the extraction.
+                val additions = withContext(Dispatchers.IO) {
+                    val result = if (splitGroup != null) {
                         ArchiveExtractor.extractGroup(splitGroup, password, app.cacheDir)
                     } else {
                         ArchiveExtractor.extract(item.bytes, item.name, password, app.cacheDir)
                     }
+                    buildUnpackedItems(item, result.entries, splitGroup?.baseName)
                 }
-                val additions = buildUnpackedItems(item, result.entries, splitGroup?.baseName)
+                refreshCacheInfo()
                 _extract.update { current ->
                     current.copy(
                         results = current.results + additions,
@@ -992,10 +1169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 showMessage(
-                    app.getString(
-                        R.string.msg_unpacked,
-                        result.entries.count { !it.path.endsWith("/") },
-                    ),
+                    localizedContext().getString(R.string.msg_unpacked, additions.count { !it.isDirectory }),
                 )
             } catch (e: ArchivePasswordRequiredException) {
                 _extract.update {
@@ -1017,22 +1191,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _extract.update { it.copy(unpackingIndex = null) }
                 val message = when (e.reason) {
                     ArchiveUnsupportedReason.RAR_ENCRYPTED ->
-                        app.getString(R.string.msg_unpack_rar_encrypted)
+                        localizedContext().getString(R.string.msg_unpack_rar_encrypted)
                     ArchiveUnsupportedReason.RAR4_SOLID ->
-                        app.getString(R.string.msg_unpack_rar4_solid)
+                        localizedContext().getString(R.string.msg_unpack_rar4_solid)
                     null -> e.message
-                        ?: app.getString(R.string.msg_unpack_unsupported, format.label)
+                        ?: localizedContext().getString(R.string.msg_unpack_unsupported, format.label)
                 }
                 showMessage(message)
             } catch (e: ArchiveMissingPartsException) {
                 _extract.update { it.copy(unpackingIndex = null) }
-                showMessage(app.getString(R.string.msg_missing_parts, e.missing.joinToString(", ")))
+                showMessage(localizedContext().getString(R.string.msg_missing_parts, e.missing.joinToString(", ")))
             } catch (e: ArchiveFormatException) {
                 _extract.update { it.copy(unpackingIndex = null) }
-                showMessage(app.getString(R.string.msg_unpack_failed, e.message ?: ""))
+                showMessage(localizedContext().getString(R.string.msg_unpack_failed, e.message ?: ""))
             } catch (t: Throwable) {
                 _extract.update { it.copy(unpackingIndex = null) }
-                showMessage(app.getString(R.string.msg_unpack_failed, t.message ?: t.javaClass.simpleName))
+                showMessage(localizedContext().getString(R.string.msg_unpack_failed, t.message ?: t.javaClass.simpleName))
             }
         }
     }
@@ -1229,6 +1403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val PREFS_NAME = "settings"
         const val KEY_COMPAT_MODE = "compat_mode"
+        const val KEY_SECURE_WINDOW = "secure_window"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LANGUAGE_MODE = "language_mode"
         const val KEY_SHARE_WARNING_SEEN = "share_warning_seen"

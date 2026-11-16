@@ -2,28 +2,86 @@ package com.imagefolder.open.core
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
+import android.util.Size
 import java.io.ByteArrayOutputStream
-import kotlin.math.hypot
 
 object ImageProcessor {
+
+    /**
+     * Longest edge kept when the cover is decoded for generation. A 108 MP
+     * phone photo decoded at full size needs ~430 MB of ARGB_8888 memory and
+     * would OOM on most devices; 4096 px is more than any gallery export needs.
+     */
+    const val MAX_CARRIER_SIZE = 4096
+
+    /** Longest edge used for on-screen previews. */
+    const val PREVIEW_SIZE = 720
 
     /** Decodes the cover image with EXIF orientation applied and a software-backed buffer. */
     fun loadCover(context: Context, uri: Uri): Bitmap {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
-        return ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             decoder.isMutableRequired = true
+            applyTargetSize(decoder, info.size, MAX_CARRIER_SIZE)
         }
+    }
+
+    /**
+     * Decodes [uri] for display only, downsampled to [maxSize] on the long edge.
+     *
+     * Decoding at full resolution just to fill a 180 dp thumbnail used to
+     * allocate hundreds of megabytes; once the system folder picker came to the
+     * foreground the app was GC-thrashing or killed, which is what "选完表图再
+     * 选文件夹就卡爆" looked like.
+     */
+    fun decodePreview(
+        context: Context,
+        uri: Uri,
+        maxSize: Int = PREVIEW_SIZE,
+    ): Bitmap? = runCatching {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            applyTargetSize(decoder, info.size, maxSize)
+        }
+    }.getOrNull()
+
+    /**
+     * Decodes in-memory [bytes] for display only, downsampled to [maxSize] on
+     * the long edge. Used by the extraction preview, where the payload can be
+     * a full-resolution photo.
+     */
+    fun decodePreviewBytes(bytes: ByteArray, maxSize: Int = PREVIEW_SIZE): Bitmap? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+        var sample = 1
+        while (longest / sample > maxSize) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    }.getOrNull()
+
+    private fun applyTargetSize(decoder: ImageDecoder, size: Size, maxSize: Int) {
+        val longest = maxOf(size.width, size.height)
+        if (longest <= maxSize || longest <= 0) return
+        val scale = maxSize.toFloat() / longest
+        decoder.setTargetSize(
+            (size.width * scale).toInt().coerceAtLeast(1),
+            (size.height * scale).toInt().coerceAtLeast(1),
+        )
     }
 
     /**
@@ -72,18 +130,47 @@ object ImageProcessor {
         return out.toByteArray()
     }
 
+    /**
+     * Draws [note] in the top-right corner.
+     *
+     * The font size now comes from [NoteText] (a share of the short edge,
+     * clamped) instead of 7.54% of the diagonal, which produced oversized text
+     * on 16:9 screenshots. Notes that are too wide are shrunk and, if they
+     * still do not fit, ellipsized instead of running off the image.
+     */
     private fun drawNote(bitmap: Bitmap, note: String) {
+        val text = note.trim()
+        if (text.isEmpty()) return
         val canvas = Canvas(bitmap)
+        val margin = minOf(bitmap.width, bitmap.height) * 0.02f
+        val available = NoteText.availableWidth(bitmap.width)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            textSize = hypot(bitmap.width.toFloat(), bitmap.height.toFloat()) * 0.07541333f
+            textSize = NoteText.baseTextSize(bitmap.width, bitmap.height)
         }
-        val bounds = Rect()
-        paint.getTextBounds(note, 0, note.length, bounds)
-        val x = bitmap.width - bounds.width() - 10f
-        val y = 10f - bounds.top
-        canvas.drawText(note, x, y, paint)
+        var body = text
+        var width = paint.measureText(body)
+        if (width > available) {
+            paint.textSize = NoteText.fitTextSize(paint.textSize, width, available)
+            width = paint.measureText(body)
+            if (NoteText.needsEllipsis(width, available)) {
+                body = ellipsize(paint, body, available)
+                width = paint.measureText(body)
+            }
+        }
+        val x = (bitmap.width - width - margin).coerceAtLeast(margin)
+        val y = margin - paint.fontMetrics.ascent
+        canvas.drawText(body, x, y, paint)
+    }
+
+    private fun ellipsize(paint: Paint, text: String, maxWidth: Float): String {
+        val suffix = "…"
+        var end = text.length
+        while (end > 1 && paint.measureText(text.substring(0, end) + suffix) > maxWidth) {
+            end--
+        }
+        return text.substring(0, end).trimEnd() + suffix
     }
 
     /**

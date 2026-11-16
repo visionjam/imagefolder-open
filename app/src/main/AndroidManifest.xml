@@ -6,8 +6,13 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!--
+      allowBackup is off: this app's data is only preferences, but a tool whose
+      selling point is "nothing leaves the device" should not ship its app data
+      to Google Drive Auto Backup or to a device-to-device transfer either.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"

@@ -6,7 +6,7 @@
 
 > 本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现。代码与素材全部重写，不包含原应用的任何代码或资源。
 >
-> 当前版本：**v0.9.0** · [更新日志](CHANGELOG.md)
+> 当前版本：**v0.10.0** · [更新日志](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -21,7 +21,7 @@
   - 不选表图时自动生成绿色苹果示意图
   - 备注会绘制在图片右上角
   - 输出格式跟随表图：PNG / JPEG / WebP 原样保留，HEIC/AVIF 等转为 PNG
-  - 输出文件名沿用原版风格：`Tank_20261115_123456.png` / `.jpg` / `.webp`
+  - 输出文件名默认沿用原版风格（`Tank_20261115_123456.png` / `.jpg` / `.webp`），也可以在打包页自定义；扩展名始终跟随表图格式
 - **文件夹**：通过系统目录选择器添加整个文件夹，保留目录结构与空目录
 - **压缩**：ZIP Deflate 压缩，减小载荷体积
 - **加密**：AES-256-GCM + PBKDF2-HMAC-SHA256（600,000 次），提取时需要密码；旧版生成的包仍按头部记录的迭代次数读取
@@ -30,7 +30,7 @@
   - 单个保存或全部保存到相册
   - 非图片文件保存后可调用系统应用打开
   - 按目录结构「导出到文件夹」
-- **文件夹扫描**：递归扫描选中的文件夹，列出 PNG / JPEG / WebP 中含隐藏内容的图片，可一键加入提取
+- **文件夹扫描**：递归扫描选中的文件夹，列出 PNG / JPEG / WebP 中含隐藏内容的图片，可逐张勾选后加入提取，也可一键全部加入
 - **全部文件访问（可选）**：在系统设置授权后，可浏览并扫描内置存储根目录、Download 等系统选择器无法进入的普通目录
 - **解压**：提取结果中的压缩包可直接解压
   - ZIP（ZipCrypto / AES 密码）、7z（密码）
@@ -42,6 +42,7 @@
 - **分享进来**：从其他应用分享文件或图片；普通文件进入打包页，含隐藏内容的图片可选择提取或打包
 - **分享出去**：生成结果可直接分享；首次会提示聊天平台可能重压缩、导致隐藏数据丢失
 - **多语言与主题**：语言可跟随系统或手动选择简体中文 / English；主题同样支持跟随系统 / 浅色 / 深色
+- **缓存自动清理**：启动时清理 3 天前或超过 64 MB 的临时文件（分享导入副本、分享副本、解压临时文件），关于页显示当前占用并可一键清理
 - **兼容模式**：仅从相册单选一张图片，适配选择器异常的设备
 - **Material 3**：动态取色、深色模式、Edge-to-Edge
 
@@ -90,7 +91,14 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷，详见 [d
 
 ## 下载
 
-从 [Releases](https://github.com/visionjam/imagefolder-open/releases) 下载最新签名的 APK。
+每个版本发两个签名包，按手机选一个：
+
+| 文件 | 内容 | 什么时候用 |
+| --- | --- | --- |
+| `imagefolder-open-vX.Y.Z-arm64-v8a.apk` | 只含 64 位 ARM（约 5.5 MB） | 近几年的大多数手机，体积更小 |
+| `imagefolder-open-vX.Y.Z-universal.apk` | `arm64-v8a` + `armeabi-v7a`（约 7.4 MB） | 老的 32 位 ARM 设备 |
+
+两个包用同一把密钥签名，可以互相覆盖升级，也能覆盖旧版本。每个包都附带 `.sha256` 文件。
 
 ## 构建
 
@@ -153,11 +161,14 @@ app/src/main/java/com/imagefolder/open/
 ├── core/ArchiveExtractor.kt       # ZIP/7z/TAR/GZ/BZ2/XZ/RAR 解压与分卷
 ├── core/RarExtractor.kt           # RAR 后端接口（单测可注入）
 ├── core/LibarchiveRarExtractor.kt # 经 libarchive 解压 RAR4/RAR5
-├── core/ImageProcessor.kt         # 封面解码、备注绘制、PNG/JPEG/WebP 编码
+├── core/ImageProcessor.kt         # 封面解码（降采样）、备注绘制、编码
+├── core/NoteText.kt               # 备注字号规则（按短边，带上下限）
+├── core/OutputName.kt             # 用户自定义输出文件名的清洗与扩展名处理
 ├── data/FolderReader.kt           # SAF 目录枚举、结构保留
 ├── data/FolderScanner.kt          # 递归扫描含隐藏内容的图片
 ├── data/FolderExporter.kt         # 按目录结构导出
 ├── data/GallerySaver.kt           # MediaStore 保存
+├── data/CacheCleaner.kt           # 清理应用自己写在 cacheDir 的临时文件
 ├── data/ImageFiles.kt             # 内置浏览器用的纯 File 目录遍历
 ├── data/ShareClassifier.kt        # 分享文件分类到提取/打包
 ├── data/UriUtils.kt               # 内容 URI 读取

@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -56,6 +57,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Applied before the first frame so a screenshot taken during startup
+        // cannot capture anything either.
+        applySecureWindow(viewModel.secureWindow.value)
         setContent {
             AppRoot(viewModel = viewModel)
         }
@@ -98,10 +102,20 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+/** Opt-in screen protection; off by default so screenshots keep working. */
+private fun Activity.applySecureWindow(enabled: Boolean) {
+    if (enabled) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    } else {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+}
+
 @Composable
 private fun AppRoot(viewModel: MainViewModel) {
     val themeMode by viewModel.themeMode.collectAsState()
     val languageMode by viewModel.languageMode.collectAsState()
+    val secureWindow by viewModel.secureWindow.collectAsState()
 
     LaunchedEffect(languageMode) {
         val locales = when (languageMode) {
@@ -122,6 +136,9 @@ private fun AppRoot(viewModel: MainViewModel) {
 
     val view = LocalView.current
     val context = LocalContext.current
+    LaunchedEffect(secureWindow) {
+        context.findActivity()?.applySecureWindow(secureWindow)
+    }
     if (!view.isInEditMode) {
         SideEffect {
             val window = context.findActivity()?.window ?: return@SideEffect

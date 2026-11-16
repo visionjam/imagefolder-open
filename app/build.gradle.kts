@@ -7,7 +7,7 @@ plugins {
 // Build a single ABI with -Pabi=arm64-v8a (or armeabi-v7a); default packages both.
 val requestedAbi = providers.gradleProperty("abi").orNull
 val packagedAbis = when (requestedAbi) {
-    "arm64-v8a", "armeabi-v7a" -> listOf(requestedAbi!!)
+    "arm64-v8a", "armeabi-v7a" -> listOfNotNull(requestedAbi)
     else -> listOf("arm64-v8a", "armeabi-v7a")
 }
 
@@ -20,8 +20,8 @@ android {
         applicationId = "com.imagefolder.open"
         minSdk = 29
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.9.0"
+        versionCode = 11
+        versionName = "0.10.0"
         vectorDrawables { useSupportLibrary = true }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("zh", "en")
@@ -57,6 +57,28 @@ android {
             // Not used without kotlin-reflect / commons-codec language APIs.
             excludes += "/kotlin/**"
             excludes += "/org/apache/commons/codec/language/**"
+        }
+    }
+}
+
+/**
+ * Names the packaged APK after the ABI set it contains, so release assets stop
+ * using the unwieldy "arm64-v8a_armeabi-v7a" suffix: a build with both ABIs is
+ * a single "universal" artifact, single-ABI builds keep their ABI name.
+ *
+ * Must stay inside `androidComponents`: the legacy `applicationVariants`
+ * output API is gone in AGP 8.x.
+ */
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        val abiSuffix = if (packagedAbis.size == 1) packagedAbis.first() else "universal"
+        variant.outputs.forEach { output ->
+            val implementation =
+                output as? com.android.build.api.variant.impl.VariantOutputImpl ?: return@forEach
+            val version = output.versionName.orNull ?: "0.0.0"
+            implementation.outputFileName.set(
+                "imagefolder-open-v$version-$abiSuffix.apk",
+            )
         }
     }
 }
