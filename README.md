@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v0.9.0** · [Changelog](CHANGELOG.md)
+> Current version: **v0.10.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -21,7 +21,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Generates a green apple placeholder cover when no cover is selected
   - Draws the note in the top-right corner
   - Output format follows the cover: PNG / JPEG / WebP are preserved; HEIC/AVIF and other containers are converted to PNG
-  - Output names follow the original style: `Tank_20261115_123456.png` / `.jpg` / `.webp`
+  - Output names default to the original style (`Tank_20261115_123456.png` / `.jpg` / `.webp`) and can be set freely in the Pack screen; the extension always follows the cover format
 - **Folders**: add whole directories through the system picker; directory structure and empty folders are preserved
 - **Compression**: ZIP Deflate to reduce payload size
 - **Encryption**: AES-256-GCM + PBKDF2-HMAC-SHA256 (600,000 iterations); a password is required for extraction. Older bundles are read with the iteration count stored in their header.
@@ -30,7 +30,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Save one item or all items to the gallery
   - Open non-image files after saving
   - Export to a folder while preserving the directory structure
-- **Folder scan**: recursively scan a folder and list PNG / JPEG / WebP images that contain hidden content; add them all to extraction
+- **Folder scan**: recursively scan a folder and list PNG / JPEG / WebP images that contain hidden content; tick the images you want and add just those (or all of them) to extraction
 - **All files access (optional)**: after granting it in system settings, browse the internal storage root, Download and other ordinary folders the system picker cannot open
 - **Unpack**: archives in extraction results can be unpacked in-app
   - ZIP (ZipCrypto / AES passwords), 7z (password)
@@ -42,6 +42,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 - **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
 - **Share out**: share a generated image directly; a first-time note explains that chat apps may recompress it and strip the hidden data
 - **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
+- **Automatic cache cleanup**: transient files (share imports, share copies, archive scratch files) older than 3 days or above 64 MB are pruned at launch; About shows the current size with a one-tap clear button
 - **Compatibility mode**: pick a single image from the gallery for devices with picker issues
 - **Material 3**: dynamic color, dark mode, edge-to-edge
 
@@ -153,11 +154,14 @@ app/src/main/java/com/imagefolder/open/
 ├── core/ArchiveExtractor.kt       # ZIP/7z/TAR/GZ/BZ2/XZ/RAR extraction, split volumes
 ├── core/RarExtractor.kt           # RAR backend interface (injectable for JVM tests)
 ├── core/LibarchiveRarExtractor.kt # RAR4/RAR5 through libarchive
-├── core/ImageProcessor.kt         # cover decoding, note drawing, PNG/JPEG/WebP encoding
+├── core/ImageProcessor.kt         # cover decoding (downsampled), note drawing, encoding
+├── core/NoteText.kt               # note font-size rules (short-edge based, clamped)
+├── core/OutputName.kt             # user-supplied output file name sanitising
 ├── data/FolderReader.kt           # SAF directory traversal, structure preservation
 ├── data/FolderScanner.kt          # recursive scan for images with hidden content
 ├── data/FolderExporter.kt         # export with directory structure
 ├── data/GallerySaver.kt           # MediaStore saving
+├── data/CacheCleaner.kt           # prunes the app's own cacheDir entries
 ├── data/ImageFiles.kt             # pure File-tree walker for the all-files browser
 ├── data/ShareClassifier.kt        # split shared files into extract / pack
 ├── data/UriUtils.kt               # content URI reading

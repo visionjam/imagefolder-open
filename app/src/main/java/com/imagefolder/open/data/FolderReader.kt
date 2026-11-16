@@ -24,14 +24,28 @@ class FolderBudgetExceededException : Exception()
 /** Reads a SAF tree and turns it into ZIP entries, preserving directory structure. */
 object FolderReader {
 
-    fun describe(context: Context, uri: Uri): PickedFolder {
+    /**
+     * Counts the files in [uri] for display only.
+     *
+     * The walk stops at [maxFiles]: a tree such as the storage root or a DCIM
+     * folder with tens of thousands of entries used to keep the picker's
+     * callback busy for minutes, which looked like the app freezing right after
+     * the folder was chosen.
+     */
+    fun describe(context: Context, uri: Uri, maxFiles: Int = 20_000): PickedFolder {
         val root = DocumentFile.fromTreeUri(context, uri)
             ?: throw IllegalArgumentException("无法读取文件夹")
         var count = 0
-        fun countFiles(directory: DocumentFile) {
+        fun countFiles(directory: DocumentFile): Boolean {
             for (child in directory.listFiles()) {
-                if (child.isDirectory) countFiles(child) else if (child.isFile) count++
+                if (child.isDirectory) {
+                    if (!countFiles(child)) return false
+                } else if (child.isFile) {
+                    count++
+                    if (count >= maxFiles) return false
+                }
             }
+            return true
         }
         countFiles(root)
         return PickedFolder(uri, root.name ?: "文件夹", count)

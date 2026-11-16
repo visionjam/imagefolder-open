@@ -1,7 +1,6 @@
 package com.imagefolder.open.ui
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +13,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -35,30 +37,39 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.imagefolder.open.GeneratedResult
 import com.imagefolder.open.R
+import com.imagefolder.open.core.ImageProcessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** Longest edge used when previewing the generated carrier. */
+private const val GENERATED_PREVIEW_SIZE = 1080
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GeneratedImageScreen(
     result: GeneratedResult,
     onSave: () -> Unit,
+    onRename: (String) -> Unit,
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState,
     shareWarningSeen: Boolean,
@@ -66,9 +77,16 @@ fun GeneratedImageScreen(
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     var showShareWarning by remember { mutableStateOf(false) }
     var dontAskAgain by remember { mutableStateOf(false) }
+
+    // Local editing state keeps the IME composition intact; see PackScreen.
+    var nameText by rememberSaveable { mutableStateOf(result.displayName) }
+    LaunchedEffect(result.displayName) {
+        if (result.displayName != nameText) nameText = result.displayName
+    }
 
     fun share() {
         scope.launch {
@@ -149,12 +167,10 @@ fun GeneratedImageScreen(
         ) {
             @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
             val bitmap by produceState<Bitmap?>(null, result.bytes) {
-                val loaded = withContext(Dispatchers.IO) {
-                    runCatching {
-                        BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)
-                    }.getOrNull()
+                // Downsampled: the generated carrier can be a full-size photo.
+                value = withContext(Dispatchers.IO) {
+                    ImageProcessor.decodePreviewBytes(result.bytes, GENERATED_PREVIEW_SIZE)
                 }
-                value = loaded
             }
 
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -171,7 +187,20 @@ fun GeneratedImageScreen(
                 }
             }
 
-            Text(result.fileName, style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = nameText,
+                onValueChange = {
+                    nameText = it
+                    onRename(it)
+                },
+                label = { Text(stringResource(R.string.output_name_label)) },
+                supportingText = { Text(stringResource(R.string.rename_hint)) },
+                singleLine = true,
+                enabled = !result.saved,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
             Text(
                 text = formatSize(result.bytes.size.toLong()),
                 style = MaterialTheme.typography.bodyMedium,

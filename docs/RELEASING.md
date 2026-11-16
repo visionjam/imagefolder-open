@@ -7,8 +7,8 @@
 修改 `app/build.gradle.kts`：
 
 ```kotlin
-versionCode = 10          // 每次发版 +1，v0.9.0 为 10
-versionName = "0.9.0"     // 与 tag、CHANGELOG 和两份 README 保持一致
+versionCode = 11          // 每次发版 +1，v0.10.0 为 11
+versionName = "0.10.0"    // 与 tag、CHANGELOG 和两份 README 保持一致
 ```
 
 `versionCode` 必须严格递增，否则已安装的用户无法覆盖升级。同步更新 `CHANGELOG.md` 与 `README.md` / `README.zh-CN.md` 顶部的当前版本号。
@@ -27,8 +27,13 @@ versionName = "0.9.0"     // 与 tag、CHANGELOG 和两份 README 保持一致
 ./gradlew assembleRelease -Pabi=arm64-v8a  # 只打 64 位 ARM（产物更小）
 ```
 
-产物：`app/build/outputs/apk/release/app-release-unsigned.apk`。
-发布资产按 ABI 命名，与 v0.9.0 保持一致：双 ABI 用 `imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk`，单 ABI 用 `imagefolder-open-vX.Y.Z-arm64-v8a.apk`。
+产物文件名由 `app/build.gradle.kts` 的 `androidComponents` 决定，直接就是发布资产名：
+
+- 双 ABI（省略 `-Pabi`）：`imagefolder-open-vX.Y.Z-universal.apk`
+- 单 ABI：`imagefolder-open-vX.Y.Z-arm64-v8a.apk` / `...-armeabi-v7a.apk`
+
+因此 `zipalign` 的输入路径要跟着改（见下一节）。v0.10.0 起不再使用
+`arm64-v8a_armeabi-v7a` 这种后缀，历史资产名保持不变，不要重传。
 
 release 构建已开启 R8 代码压缩与资源收缩。请把 `app/build/outputs/mapping/release/mapping.txt` 一并归档，便于解析线上崩溃堆栈。
 
@@ -44,7 +49,7 @@ PASS_FILE=/path/to/keystore-password.txt   # 一行密码；不要写进命令�
 
 # 16 KB page-size devices: keep shared libraries 16 KB aligned.
 $BT/zipalign -f -P 16 4 \
-  app/build/outputs/apk/release/app-release-unsigned.apk \
+  app/build/outputs/apk/release/imagefolder-open-vX.Y.Z-universal.apk \
   dist/app-release-aligned.apk
 
 $BT/apksigner sign \
@@ -52,11 +57,11 @@ $BT/apksigner sign \
   --ks-pass "file:$PASS_FILE" \
   --key-pass "file:$PASS_FILE" \
   --ks-key-alias "$KEY_ALIAS" \
-  --out dist/imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk \
+  --out dist/imagefolder-open-vX.Y.Z-universal.apk \
   dist/app-release-aligned.apk
 
 $BT/apksigner verify --print-certs \
-  dist/imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk
+  dist/imagefolder-open-vX.Y.Z-universal.apk
 ```
 
 minSdk 29 时默认使用 v3 签名即可。密码一律用 `file:` 传入，不要用 `pass:` 或明文写在命令行/日志里；本项目 keystore 密码与 key 密码相同，共用一个文件即可。
@@ -65,8 +70,8 @@ minSdk 29 时默认使用 v3 签名即可。密码一律用 `file:` 传入，不
 
 ```bash
 cd dist
-sha256sum imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk \
-  > imagefolder-open-vX.Y.Z-arm64-v8a_armeabi-v7a.apk.sha256
+sha256sum imagefolder-open-vX.Y.Z-universal.apk \
+  > imagefolder-open-vX.Y.Z-universal.apk.sha256
 ```
 
 `.sha256` 文件内只写文件名，不要包含本机绝对路径。

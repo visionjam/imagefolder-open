@@ -1,7 +1,6 @@
 package com.imagefolder.open.ui
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,11 +14,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
@@ -45,10 +47,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +60,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -67,6 +73,7 @@ import com.imagefolder.open.MAX_PACK_MB
 import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.PackUiState
 import com.imagefolder.open.R
+import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.data.PickedFile
 import com.imagefolder.open.data.PickedFolder
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +86,7 @@ fun PackScreen(
     viewModel: MainViewModel,
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.setCover(uri)
@@ -95,6 +103,14 @@ fun PackScreen(
         if (uri != null) viewModel.addFolder(uri)
     }
 
+    // Text fields keep their own editing state. Writing every keystroke through
+    // the ViewModel's StateFlow made the value arrive one frame late, which
+    // dropped characters and reset pinyin composition while typing a note.
+    var noteText by rememberSaveable { mutableStateOf(state.note) }
+    var nameText by rememberSaveable { mutableStateOf(state.outputName) }
+    LaunchedEffect(state.note) { if (state.note != noteText) noteText = state.note }
+    LaunchedEffect(state.outputName) { if (state.outputName != nameText) nameText = state.outputName }
+
     val passwordMismatch = state.passwordConfirm.isNotEmpty() && state.password != state.passwordConfirm
     val hasContent = state.payloads.isNotEmpty() || state.folders.isNotEmpty()
     val passwordReady = !state.encrypt ||
@@ -103,6 +119,7 @@ fun PackScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -121,16 +138,15 @@ fun PackScreen(
                 @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
                 val coverBitmap by produceState<Bitmap?>(null, cover?.uri) {
                     val uri = cover?.uri
-                    val loaded = if (uri == null) {
+                    value = if (uri == null) {
                         null
                     } else {
                         withContext(Dispatchers.IO) {
-                            runCatching {
-                                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                            }.getOrNull()
+                            // Preview only: decode a downsampled bitmap instead of
+                            // the full-resolution photo (which could be 200 MB).
+                            ImageProcessor.decodePreview(context, uri, PREVIEW_MAX_SIZE)
                         }
                     }
-                    value = loaded
                 }
 
                 Box(
@@ -247,8 +263,27 @@ fun PackScreen(
             }
         }
 
+        if (state.folderLoading) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.folder_reading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         OutlinedButton(
             onClick = { folderPicker.launch(null) },
+            enabled = !state.folderLoading,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
@@ -309,11 +344,31 @@ fun PackScreen(
         )
 
         OutlinedTextField(
-            value = state.note,
-            onValueChange = viewModel::setNote,
+            value = nameText,
+            onValueChange = {
+                nameText = it
+                viewModel.setOutputName(it)
+            },
+            label = { Text(stringResource(R.string.output_name_label)) },
+            placeholder = { Text(stringResource(R.string.output_name_placeholder)) },
+            supportingText = { Text(stringResource(R.string.output_name_hint)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = noteText,
+            onValueChange = {
+                noteText = it
+                viewModel.setNote(it)
+            },
             label = { Text(stringResource(R.string.note_label)) },
             supportingText = { Text(stringResource(R.string.note_hint)) },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -359,6 +414,9 @@ fun PackScreen(
         Spacer(Modifier.height(8.dp))
     }
 }
+
+/** Preview decode target: 1080 px covers a 180 dp box on a 3x density screen. */
+private const val PREVIEW_MAX_SIZE = 1080
 
 @Composable
 private fun PayloadRow(file: PickedFile, onRemove: () -> Unit) {
@@ -465,9 +523,14 @@ private fun PasswordField(
     label: String,
 ) {
     var visible by remember { mutableStateOf(false) }
+    var text by rememberSaveable { mutableStateOf(value) }
+    LaunchedEffect(value) { if (value != text) text = value }
     OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = text,
+        onValueChange = {
+            text = it
+            onValueChange(it)
+        },
         label = { Text(label) },
         singleLine = true,
         visualTransformation = if (visible) {

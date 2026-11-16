@@ -28,7 +28,9 @@ import com.imagefolder.open.core.CarrierFormat
 import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
+import com.imagefolder.open.core.OutputName
 import com.imagefolder.open.core.PngChunkCodec
+import com.imagefolder.open.data.CacheCleaner
 import com.imagefolder.open.data.FolderBudgetExceededException
 import com.imagefolder.open.data.FolderExporter
 import com.imagefolder.open.data.FolderReader
@@ -75,6 +77,8 @@ enum class LanguageMode {
 
 data class GeneratedResult(
     val fileName: String,
+    /** What the user typed, kept verbatim so the rename field does not fight the sanitiser. */
+    val displayName: String = "",
     val bytes: ByteArray,
     val saved: Boolean = false,
     val savedLocation: String? = null,
@@ -94,6 +98,10 @@ data class PackUiState(
     val password: String = "",
     val passwordConfirm: String = "",
     val generating: Boolean = false,
+    /** User supplied output file name; blank keeps the Tank_<timestamp> default. */
+    val outputName: String = "",
+    /** True while a picked folder is being described (counting its files). */
+    val folderLoading: Boolean = false,
     val result: GeneratedResult? = null,
 )
 
@@ -123,6 +131,8 @@ data class ExtractUiState(
     val scanScanned: Int = 0,
     val scanTotal: Int = 0,
     val scanHits: List<ScanHit> = emptyList(),
+    /** URIs of scan hits the user ticked for extraction. */
+    val selectedScanUris: Set<String> = emptySet(),
     val scanCompleted: Boolean = false,
     val scanError: String? = null,
 )
@@ -148,6 +158,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var scanGeneration = 0
+
+    private val _cacheBytes = MutableStateFlow(0L)
+    val cacheBytes: StateFlow<Long> = _cacheBytes.asStateFlow()
+
+    init {
+        // Transient payload copies and archive scratch files used to accumulate
+        // in cacheDir forever; prune them once per process start.
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                CacheCleaner.prune(getApplication<Application>().cacheDir, System.currentTimeMillis())
+            }
+            refreshCacheInfo()
+        }
+    }
 
     private val _allFilesAccess = MutableStateFlow(hasAllFilesAccess())
     val allFilesAccess: StateFlow<Boolean> = _allFilesAccess.asStateFlow()
@@ -422,19 +446,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
-            val folder = withContext(Dispatchers.IO) {
-                runCatching { FolderReader.describe(app, uri) }.getOrNull()
-            }
-            if (folder == null) {
-                showMessage(app.getString(R.string.msg_extract_failed, "无法读取文件夹"))
-            } else {
-                _pack.update { state ->
-                    if (state.folders.any { it.uri == folder.uri }) {
-                        state
-                    } else {
-                        state.copy(folders = state.folders + folder)
+            _pack.update { it.copy(folderLoading = true) }
+            try {
+                val folder = withContext(Dispatchers.IO) {
+                    runCatching { FolderReader.describe(app, uri) }.getOrNull()
+                }
+                if (folder == null) {
+                    showMessage(app.getString(R.string.msg_extract_failed, "无法读取文件夹"))
+                } else {
+                    _pack.update { state ->
+                        if (state.folders.any { it.uri == folder.uri }) {
+                            state
+                        } else {
+                            state.copy(folders = state.folders + folder)
+                        }
                     }
                 }
+            } finally {
+                _pack.update { it.copy(folderLoading = false) }
             }
         }
     }
@@ -445,6 +474,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNote(note: String) {
         _pack.update { it.copy(note = note) }
+    }
+
+    /** Blank keeps the default `Tank_<timestamp>` name. */
+    fun setOutputName(name: String) {
+        _pack.update { it.copy(outputName = name) }
+    }
+
+    /** Renames the generated image before it is saved. */
+    fun renameResult(rawName: String) {
+        val current = _pack.value.result ?: return
+        if (current.saved) return
+        val extension = current.fileName.substringAfterLast('.', "png")
+        val fallbackStem = current.fileName.substringBeforeLast('.', OutputName.DEFAULT_PREFIX)
+        val renamed = OutputName.build(rawName, extension, fallbackStem)
+        if (renamed == current.fileName && rawName == current.displayName) return
+        _pack.update {
+            it.copy(result = current.copy(fileName = renamed, displayName = rawName))
+        }
     }
 
     fun setCompress(enabled: Boolean) {
@@ -497,9 +544,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         ?: CarrierFormat.PNG
                     val cover = state.cover?.let { ImageProcessor.loadCover(app, it.uri) }
                     val coverBytes = ImageProcessor.renderHiddenImage(cover, state.note, carrier)
-                    val fileName = "Tank_" +
-                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) +
-                        "." + carrier.extension
+                    val defaultStem = OutputName.DEFAULT_PREFIX +
+                        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                    val fileName = OutputName.build(
+                        rawName = state.outputName,
+                        extension = carrier.extension,
+                        fallbackStem = defaultStem,
+                    )
                     val advanced = state.folders.isNotEmpty() || state.encrypt || state.compress
 
                     if (carrier != CarrierFormat.PNG) {
@@ -524,6 +575,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = bytes,
                             bundle = true,
                             entryCount = entries.size,
@@ -548,6 +602,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = PngChunkCodec.insertFiles(coverBytes, hidden),
                             bundle = false,
                             entryCount = hidden.size,
@@ -574,6 +631,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         GeneratedResult(
                             fileName = fileName,
+                            displayName = state.outputName.ifBlank {
+                                fileName.substringBeforeLast('.')
+                            },
                             bytes = bytes,
                             bundle = true,
                             entryCount = entries.size,
@@ -624,6 +684,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAllFilesAccess() {
         _allFilesAccess.value = hasAllFilesAccess()
+        refreshCacheInfo()
+    }
+
+    /** Recomputes the size of the app's own cache directory. */
+    fun refreshCacheInfo() {
+        viewModelScope.launch {
+            _cacheBytes.value = withContext(Dispatchers.IO) {
+                CacheCleaner.totalBytes(getApplication<Application>().cacheDir)
+            }
+        }
+    }
+
+    /** Drops every transient file the app wrote into cacheDir. */
+    fun clearCache() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val freed = withContext(Dispatchers.IO) {
+                CacheCleaner.clear(app.cacheDir)
+            }
+            refreshCacheInfo()
+            showMessage(app.getString(R.string.msg_cache_cleared, formatCacheSize(freed)))
+        }
+    }
+
+    private fun formatCacheSize(bytes: Long): String = when {
+        bytes <= 0 -> "0 KB"
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
     }
 
     private fun hasAllFilesAccess(): Boolean =
@@ -674,9 +763,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val hits = withContext(Dispatchers.IO) {
+                    // Progress used to be pushed for every single file, which
+                    // flooded the state flow on folders with thousands of
+                    // images; 120 ms is well below the visible threshold.
+                    var lastReport = 0L
                     scan(
                         { scanned, total ->
-                            if (generation == scanGeneration) {
+                            val now = System.currentTimeMillis()
+                            val due = now - lastReport >= 120L || scanned == 0 || scanned >= total
+                            if (due && generation == scanGeneration) {
+                                lastReport = now
                                 _extract.update { state ->
                                     state.copy(scanScanned = scanned, scanTotal = total)
                                 }
@@ -690,6 +786,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             scanning = false,
                             scanHits = hits,
+                            selectedScanUris = hits.mapTo(mutableSetOf()) { hit ->
+                                hit.uri.toString()
+                            },
                             scanScanned = it.scanTotal,
                             scanCompleted = true,
                             scanError = null,
@@ -728,6 +827,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 scanning = false,
                 scanCompleted = false,
                 scanError = null,
+                selectedScanUris = emptySet(),
             )
         }
     }
@@ -735,6 +835,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addScanHitsToExtract() {
         val hits = _extract.value.scanHits
         if (hits.isEmpty()) return
+        addScanHits(hits)
+    }
+
+    /** Adds only the ticked scan results, so a folder scan is not all-or-nothing. */
+    fun addSelectedScanHitsToExtract() {
+        val state = _extract.value
+        val selected = state.scanHits.filter { it.uri.toString() in state.selectedScanUris }
+        if (selected.isEmpty()) {
+            showMessage(getApplication<Application>().getString(R.string.msg_scan_none_selected))
+            return
+        }
+        addScanHits(selected)
+    }
+
+    fun toggleScanHit(uri: Uri) {
+        val key = uri.toString()
+        _extract.update { state ->
+            val selected = state.selectedScanUris
+            state.copy(
+                selectedScanUris = if (key in selected) selected - key else selected + key,
+            )
+        }
+    }
+
+    fun selectAllScanHits() {
+        _extract.update { state ->
+            state.copy(selectedScanUris = state.scanHits.mapTo(mutableSetOf()) { it.uri.toString() })
+        }
+    }
+
+    fun clearScanSelection() {
+        _extract.update { it.copy(selectedScanUris = emptySet()) }
+    }
+
+    private fun addScanHits(hits: List<ScanHit>) {
         val files = hits.map { hit ->
             PickedFile(
                 uri = hit.uri,
@@ -747,6 +882,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _extract.update {
             it.copy(
                 scanHits = emptyList(),
+                selectedScanUris = emptySet(),
                 scanCompleted = false,
                 scanTotal = 0,
                 scanScanned = 0,
@@ -925,6 +1061,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     FolderExporter.export(app, treeUri, items)
                 }
                 _extract.update { it.copy(exporting = false) }
+                refreshCacheInfo()
                 if (result.failed > 0) {
                     showMessage(
                         app.getString(R.string.msg_export_partial, result.fileCount, result.failed),
@@ -975,14 +1112,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
-                    if (splitGroup != null) {
+                // Building the result rows is part of the unpack cost: an APK
+                // can carry thousands of entries, and mapping them on the main
+                // thread was a visible freeze right after the extraction.
+                val additions = withContext(Dispatchers.IO) {
+                    val result = if (splitGroup != null) {
                         ArchiveExtractor.extractGroup(splitGroup, password, app.cacheDir)
                     } else {
                         ArchiveExtractor.extract(item.bytes, item.name, password, app.cacheDir)
                     }
+                    buildUnpackedItems(item, result.entries, splitGroup?.baseName)
                 }
-                val additions = buildUnpackedItems(item, result.entries, splitGroup?.baseName)
+                refreshCacheInfo()
                 _extract.update { current ->
                     current.copy(
                         results = current.results + additions,
@@ -992,10 +1133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 showMessage(
-                    app.getString(
-                        R.string.msg_unpacked,
-                        result.entries.count { !it.path.endsWith("/") },
-                    ),
+                    app.getString(R.string.msg_unpacked, additions.count { !it.isDirectory }),
                 )
             } catch (e: ArchivePasswordRequiredException) {
                 _extract.update {

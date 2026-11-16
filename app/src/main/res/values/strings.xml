@@ -190,4 +190,18 @@
     <string name="about_tank_note">输出文件名沿用原版风格：Tank_时间戳.png / .jpg / .webp</string>
     <string name="about_expand">展开</string>
     <string name="about_collapse">收起</string>
+    <!-- v0.10.0 -->
+    <string name="output_name_label">文件名（可选）</string>
+    <string name="output_name_placeholder">Tank_20261116_233000</string>
+    <string name="output_name_hint">留空则使用 Tank_时间戳；扩展名跟随表图格式。</string>
+    <string name="rename_hint">保存前可以改名，扩展名会自动跟随格式。</string>
+    <string name="folder_reading">正在读取文件夹…</string>
+    <string name="scan_select_all">全选</string>
+    <string name="scan_select_none">清空</string>
+    <string name="scan_add_selected">加入所选（%1$d）</string>
+    <string name="msg_scan_none_selected">请先勾选要提取的图片</string>
+    <string name="extract_result_count">共 %1$d 项</string>
+    <string name="about_cache_title">清理缓存</string>
+    <string name="about_cache_summary">临时文件占用 %1$s，点按立即清理</string>
+    <string name="msg_cache_cleared">已清理缓存：%1$s</string>
 </resources>

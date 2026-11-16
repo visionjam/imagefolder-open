@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -77,6 +78,8 @@ fun AboutScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     languageMode: LanguageMode,
     onLanguageModeChange: (LanguageMode) -> Unit,
+    cacheBytes: Long,
+    onClearCache: () -> Unit,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -166,15 +169,15 @@ fun AboutScreen(
             Column {
                 ToolRow(
                     icon = Icons.Outlined.Update,
-                    titleRes = R.string.about_check_update_title,
-                    summaryRes = R.string.about_check_update_summary,
+                    title = stringResource(R.string.about_check_update_title),
+                    summary = stringResource(R.string.about_check_update_summary),
                     onClick = { uriHandler.openUri(RELEASES_URL) },
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ToolRow(
                     icon = Icons.Outlined.ContentCopy,
-                    titleRes = R.string.about_copy_version_title,
-                    summaryRes = R.string.about_copy_version_summary,
+                    title = stringResource(R.string.about_copy_version_title),
+                    summary = stringResource(R.string.about_copy_version_summary),
                     onClick = {
                         clipboard.setText(AnnotatedString(copyText))
                         Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
@@ -182,9 +185,19 @@ fun AboutScreen(
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ToolRow(
+                    icon = Icons.Outlined.DeleteSweep,
+                    title = stringResource(R.string.about_cache_title),
+                    summary = stringResource(
+                        R.string.about_cache_summary,
+                        formatSize(cacheBytes),
+                    ),
+                    onClick = onClearCache,
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ToolRow(
                     icon = Icons.Outlined.Description,
-                    titleRes = R.string.about_licenses_title,
-                    summaryRes = R.string.about_licenses_summary,
+                    title = stringResource(R.string.about_licenses_title),
+                    summary = stringResource(R.string.about_licenses_summary),
                     onClick = { showLicenses = true },
                 )
             }
@@ -394,8 +407,8 @@ private fun <T> ChipSetting(
 @Composable
 private fun ToolRow(
     icon: ImageVector,
-    @StringRes titleRes: Int,
-    @StringRes summaryRes: Int,
+    title: String,
+    summary: String,
     onClick: () -> Unit,
 ) {
     Row(
@@ -422,11 +435,11 @@ private fun ToolRow(
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(titleRes),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(summaryRes),
+                text = summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

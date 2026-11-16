@@ -46,8 +46,12 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val activeTab by viewModel.activeTab.collectAsState()
     val pendingShare by viewModel.pendingShare.collectAsState()
     val shareWarningSeen by viewModel.shareWarningSeen.collectAsState()
+    val cacheBytes by viewModel.cacheBytes.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(activeTab) {
+        if (activeTab == 2) viewModel.refreshCacheInfo()
+    }
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
@@ -70,6 +74,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
         GeneratedImageScreen(
             result = result,
             onSave = viewModel::saveResult,
+            onRename = viewModel::renameResult,
             onBack = viewModel::clearResult,
             snackbarHostState = snackbarHostState,
             shareWarningSeen = shareWarningSeen,
@@ -113,6 +118,8 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
                     onThemeModeChange = viewModel::setThemeMode,
                     languageMode = languageMode,
                     onLanguageModeChange = viewModel::setLanguageMode,
+                    cacheBytes = cacheBytes,
+                    onClearCache = viewModel::clearCache,
                 )
             }
         }
