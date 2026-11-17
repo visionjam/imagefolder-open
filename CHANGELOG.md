@@ -24,8 +24,10 @@
 ### 测试
 
 - 130 个 JVM 单元测试（新增 7 个 `MimeTypesTest`）
-- 17 个 instrumentation 用例在真机全部通过（Redmi 22011211C / Android 12，
-  新增 1 个文本 hand-off 用例）
+- 17 个 instrumentation 用例在两台真机全部通过：Redmi 22011211C / Android 12、
+  Redmi K80 Pro / Android 16（新增 1 个文本 hand-off 用例）
+- 两台设备都手工走查了提取、分享、用其他应用打开、保存后再分享；
+  文本文件（`README` / `notes.md`）分别由 Amaze Text Editor 与 Markor 正常打开
 
 ## v1.1.0 — 2026-11-17
 
