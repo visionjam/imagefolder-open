@@ -5,6 +5,8 @@
 本记录只描述程序行为与数据格式，用于实现互操作，不包含原应用代码。
 
 > 本文描述原版 v1.1。开源版 v0.2 新增的 ZIP 压缩、AES-256-GCM 加密与 `IFB2` 封装见 [FORMAT.md](FORMAT.md)。
+>
+> 原版功能清单、与当前开源版的逐项对照，以及仍然缺失的体验项见 [ORIGINAL_FEATURE_GAP.md](ORIGINAL_FEATURE_GAP.md)。
 
 ## 技术栈
 
