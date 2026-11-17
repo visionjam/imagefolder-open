@@ -18,6 +18,8 @@ import com.imagefolder.open.core.HiddenFile
 import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.PngChunkCodec
 import com.imagefolder.open.data.GallerySaver
+import com.imagefolder.open.ui.handoffFileName
+import com.imagefolder.open.ui.handoffMime
 import com.imagefolder.open.ui.writeShareCache
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.model.ZipParameters
@@ -242,6 +244,28 @@ class OnDevicePipelineTest {
             ),
         )
         assertArrayEquals(bytes, file.readBytes())
+    }
+
+    @Test
+    fun handoffTypesTextFilesAndroidCannotName() {
+        fun item(name: String, mime: String?, bytes: ByteArray) = ExtractItem(
+            name = name,
+            relativePath = name,
+            mime = mime,
+            bytes = bytes,
+            sourceName = "handoff-test",
+        )
+
+        val text = "隐藏内容".toByteArray(StandardCharsets.UTF_8)
+        assertTrue(handoffMime(item("notes.md", null, text)).startsWith("text/"))
+        assertEquals("text/plain", handoffMime(item("README", "application/octet-stream", text)))
+        assertEquals("text/plain", handoffMime(item("README", null, text)))
+        assertEquals(
+            "application/octet-stream",
+            handoffMime(item("blob.bin", "application/octet-stream", ByteArray(64))),
+        )
+        assertEquals("README.txt", handoffFileName("README", "text/plain"))
+        assertEquals("notes.md", handoffFileName("notes.md", "text/markdown"))
     }
 
     @Test

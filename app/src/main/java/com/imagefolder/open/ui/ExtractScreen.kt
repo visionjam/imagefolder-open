@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -98,6 +99,35 @@ fun ExtractScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var previewItem by remember { mutableStateOf<ExtractItem?>(null) }
+
+    // Both hand-offs write an unsaved entry into the FileProvider cache first.
+    // They are wrapped here so a failed write or a missing handler shows a
+    // snackbar instead of crashing the composition scope.
+    val openWith: (ExtractItem) -> Unit = { item ->
+        scope.launch {
+            runCatching { openWithAnotherApp(context, item) }
+                .onFailure { viewModel.showMessage(context.getString(R.string.msg_open_failed)) }
+        }
+    }
+    val shareItems: (List<ExtractItem>) -> Unit = { items ->
+        scope.launch {
+            try {
+                val shared = shareExtractedFiles(
+                    context,
+                    items,
+                    context.getString(R.string.share_action),
+                )
+                if (!shared) viewModel.showMessage(context.getString(R.string.msg_share_no_files))
+            } catch (t: Throwable) {
+                viewModel.showMessage(
+                    context.getString(
+                        R.string.msg_share_failed,
+                        t.message ?: t.javaClass.simpleName,
+                    ),
+                )
+            }
+        }
+    }
 
     // Results are stored flat ("payload/sub/a.txt"); derive one folder level at
     // a time so folder rows can be opened instead of being dead labels.
@@ -385,7 +415,8 @@ fun ExtractScreen(
                             unpacking = state.unpackingIndex == index,
                             onPreview = { previewItem = item },
                             onSave = { viewModel.saveExtracted(index) },
-                            onOpenWith = { scope.launch { openWithAnotherApp(context, item) } },
+                            onShare = { shareItems(listOf(item)) },
+                            onOpenWith = { openWith(item) },
                             onUnpack = { viewModel.unpackArchive(index) },
                         )
                     }
@@ -400,7 +431,8 @@ fun ExtractScreen(
         PreviewDialog(
             item = item,
             onDismiss = { previewItem = null },
-            onOpenWith = { scope.launch { openWithAnotherApp(context, item) } },
+            onShare = { shareItems(listOf(item)) },
+            onOpenWith = { openWith(item) },
         )
     }
 
@@ -619,6 +651,7 @@ private fun ExtractedRow(
     unpacking: Boolean,
     onPreview: () -> Unit,
     onSave: () -> Unit,
+    onShare: () -> Unit,
     onOpenWith: () -> Unit,
     onUnpack: () -> Unit,
 ) {
@@ -692,8 +725,12 @@ private fun ExtractedRow(
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 }
-                // Every format gets this: the in-app preview only understands
-                // images and text, so unknown files are handed to another app.
+                // Share is the chat/mail hand-off; open-with is the viewer
+                // hand-off. Both accept every format, because the in-app
+                // preview only understands images and text.
+                TextButton(onClick = onShare) {
+                    Text(stringResource(R.string.share_action))
+                }
                 TextButton(onClick = onOpenWith) {
                     Text(stringResource(R.string.open_with))
                 }
@@ -716,10 +753,12 @@ private fun ExtractedRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PreviewDialog(
     item: ExtractItem,
     onDismiss: () -> Unit,
+    onShare: () -> Unit,
     onOpenWith: () -> Unit,
 ) {
     val image = isImageMime(item.mime, item.name)
@@ -746,7 +785,21 @@ private fun PreviewDialog(
                     else -> Text(stringResource(R.string.msg_preview_failed))
                 }
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // FlowRow: three buttons do not fit one line on narrow screens
+                // once the system font scale is raised.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    TextButton(onClick = onShare) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.share_action))
+                    }
                     TextButton(onClick = onOpenWith) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.OpenInNew,

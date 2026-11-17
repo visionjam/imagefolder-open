@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import com.imagefolder.open.core.MimeTypes
 import java.io.IOException
 
 data class PickedFile(
@@ -82,9 +83,16 @@ object UriUtils {
         return null
     }
 
+    /**
+     * Type for [fileName], falling back to [MimeTypes] for names the platform
+     * table misses (`.md`, `.log`, `.gradle`, `.kt`, ...). Without the
+     * fallback those entries became `application/octet-stream` and no text
+     * editor was offered when handing them to another app.
+     */
     fun guessMime(fileName: String): String? {
-        val extension = fileName.substringAfterLast('.', "").lowercase()
+        val extension = MimeTypes.extensionOf(fileName)
         if (extension.isEmpty()) return null
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            ?: MimeTypes.fallbackForFileName(fileName)
     }
 }

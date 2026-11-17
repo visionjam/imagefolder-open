@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v1.1.0** · [Changelog](CHANGELOG.md)
+> Current version: **v1.2.0** · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -33,6 +33,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Browse results one folder at a time: folder rows open, and the back arrow returns to the parent folder
   - Preview images and plain-text files in-app
   - Save one item or all items to the gallery
+  - Share any file with another app: result rows and the preview dialog both offer Share. Unsaved entries are cached first, saved ones use their MediaStore URI, and the system share sheet can hand them to chat, mail, cloud drives and so on
   - Open any file with another app, including unsaved entries (they are cached first); the ROM's default app is used when one is associated, otherwise Android shows its own "Open with" picker
   - Export to a folder while preserving the directory structure
 - **Folder scan**: recursively scan a folder and list PNG / JPEG / WebP images that contain hidden content; tick the images you want and add just those (or all of them) to extraction
@@ -45,7 +46,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Preserves directory structure; nested archives can be unpacked recursively; missing split parts are listed
   - Encrypted RAR (passwords/encrypted headers) and solid RAR4 are not supported
 - **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
-- **Share out**: share a generated image directly; a first-time note explains that chat apps may recompress it and strip the hidden data
+- **Share out**: share a generated image directly, or share extracted entries one by one. A first-time note explains that chat apps may recompress a carrier and strip the hidden data
 - **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
 - **Automatic cache cleanup**: transient files (share imports, share copies, archive scratch files) older than 3 days or above 64 MB are pruned at launch; About shows the current size with a one-tap clear button
 - **Compatibility mode**: pick a single image from the gallery for devices with picker issues
@@ -147,7 +148,7 @@ Unit tests cover:
 - Split carriers: split / reassemble, arbitrary order, missing-part reporting, mixed groups, duplicates, CRC and SHA-256 validation, and round-trips through PNG / JPEG / WebP
 - Corrupt data and invalid input
 
-Currently **123 JVM unit tests + 16 on-device tests**.
+Currently **130 JVM unit tests + 17 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 
@@ -177,6 +178,7 @@ app/src/main/java/com/imagefolder/open/
 ├── core/NoteText.kt               # note font-size rules (short-edge based, clamped)
 ├── core/OutputName.kt             # user-supplied output file name sanitising
 ├── core/ResultTree.kt             # folder-level view over the flat result list
+├── core/MimeTypes.kt              # text extensions the platform MIME table misses, plus content sniffing
 ├── data/FolderReader.kt           # SAF directory traversal, structure preservation
 ├── data/FolderScanner.kt          # recursive scan for images with hidden content
 ├── data/FolderExporter.kt         # export with directory structure
@@ -201,6 +203,7 @@ app/src/main/java/com/imagefolder/open/
 - Split archives must all be present in the current extraction results (same batch of images / envelopes); missing parts are not searched on the device
 - Split carriers repeat the cover in every part, so they help when the payload is much larger than the cover; if the cover alone is near the platform limit, splitting does not make individual images smaller
 - Saved files follow the app language: `Pictures/图片文件夹` and `Download/图片文件夹` on Chinese; English and every untranslated locale fall back to `Pictures/ImageFolder` and `Download/ImageFolder`. Use "Export to folder" for the full directory structure
+- Share and "Open with" need an app on the device that handles the type; text is offered as `text/plain` / `text/*` so text editors appear, unknown binary types go through the system picker
 - Switching between Release and debug builds requires an uninstall because the signatures differ
 
 ## Disclaimer
