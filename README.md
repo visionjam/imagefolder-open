@@ -47,7 +47,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - Encrypted RAR (passwords/encrypted headers) and solid RAR4 are not supported
 - **Share in**: send files or images from other apps; ordinary files go to Pack, while images with hidden content offer Extract or Pack
 - **Share out**: share a generated image directly, or share extracted entries one by one. A first-time note explains that chat apps may recompress a carrier and strip the hidden data
-- **Languages and themes**: follow the system or choose Simplified Chinese / English; themes support system / light / dark
+- **Languages and themes**: follow the system or choose Simplified Chinese / English; any other system language falls back to English (UI and save folder); themes support system / light / dark
 - **Automatic cache cleanup**: transient files (share imports, share copies, archive scratch files) older than 3 days or above 64 MB are pruned at launch; About shows the current size with a one-tap clear button
 - **Compatibility mode**: pick a single image from the gallery for devices with picker issues; applies to both Pack and Extract
 - **First-launch agreement**: a one-off disclaimer with a single Accept button, like the original app
@@ -149,7 +149,7 @@ Unit tests cover:
 - Split carriers: split / reassemble, arbitrary order, missing-part reporting, mixed groups, duplicates, CRC and SHA-256 validation, and round-trips through PNG / JPEG / WebP
 - Corrupt data and invalid input
 
-Currently **134 JVM unit tests + 17 on-device tests**.
+Currently **134 JVM unit tests + 19 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 

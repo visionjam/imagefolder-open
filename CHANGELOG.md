@@ -17,6 +17,9 @@
   `PackActions.kt` / `ExtractActions.kt` / `ArchiveActions.kt` 三个同包文件
   （扩展函数），类、状态与行为不变；`extract()` 因与 `extract` 状态属性重名改为
   `runExtraction()`
+- **系统语言回退改为英文**：`values/` 现在是英文（默认/回退），简体中文整体移到
+  `values-zh/`；此前德语、日语等没有翻译的系统语言会显示中文界面，现在回退英文。
+  删除重复的 `values-en/`
 - 迁移到 `androidx.lifecycle.compose.LocalLifecycleOwner`，消除编译弃用警告
 - 新增 `core/SimpleLruCache.kt`（纯 Kotlin，可单测）
 - 版本号 1.3.0（versionCode 15）
@@ -27,7 +30,7 @@
 - 本机构建通过：debug、release（arm64-v8a 与 universal），R8 + 资源收缩，
   签名证书 SHA-256 与 v1.2.0 一致（可直接覆盖升级）
 - 真机验证（2026-11-17，Redmi K80 Pro / 24122RKC7C / Android 16）：
-  - `am instrument` → **OK (17 tests)**
+  - `am instrument` → **OK (19 tests)**（新增 2 个 `LocaleFallbackTest`：de-DE → 英文、zh-CN → 中文）
   - v1.2.0（14）覆盖安装 v1.3.0（15）成功；升级后首次启动弹出用户协议，
     接受后重启不再出现；卸载后全新安装再次弹出（英文系统显示英文文案）
   - 兼容模式开启后，提取页按钮变为「添加图片（兼容模式，单选）」；点按打开系统照片选择器，
