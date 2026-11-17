@@ -6,7 +6,7 @@
 
 > 本项目是针对已停止维护的原应用「图片文件夹」的独立开源重实现。代码与素材全部重写，不包含原应用的任何代码或资源。
 >
-> 当前版本：**v1.2.0** · [更新日志](CHANGELOG.md)
+> 当前版本：**v1.3.0** · [更新日志](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -31,7 +31,7 @@
   - 提取时把同一组图片一起选中即可，顺序不限；缺份、重复或数据损坏都会给出提示
 - **提取**：多选 PNG / JPEG / WebP 图片，自动识别其中的隐藏内容
   - 结果按文件夹逐层浏览：文件夹行可以点进去，左上角返回上一级
-  - 图片和纯文本文件可直接预览
+  - 图片和纯文本文件可直接预览；图片行显示缩略图（后台解码、有界缓存），点缩略图直接预览
   - 单个保存或全部保存到相册
   - 任意格式都可以「分享」给其他应用：结果行和预览对话框都有入口，未保存的条目会先写入缓存，
     已保存的条目直接使用媒体库 URI；系统分享面板里可以发给聊天、邮件、网盘等应用
@@ -50,7 +50,8 @@
 - **分享出去**：生成的图种可直接分享；提取结果也可以逐项分享给其他应用。分享图种时首次会提示聊天平台可能重压缩、导致隐藏数据丢失
 - **多语言与主题**：语言可跟随系统或手动选择简体中文 / English；主题同样支持跟随系统 / 浅色 / 深色
 - **缓存自动清理**：启动时清理 3 天前或超过 64 MB 的临时文件（分享导入副本、分享副本、解压临时文件），关于页显示当前占用并可一键清理
-- **兼容模式**：仅从相册单选一张图片，适配选择器异常的设备
+- **兼容模式**：仅从相册单选一张图片，打包与提取都生效，适配选择器异常的设备
+- **首次启动用户协议**：与原版一致，首次启动弹出一次免责声明，只有「接受」按钮
 - **Material 3**：动态取色、深色模式、Edge-to-Edge
 
 ### 格式兼容性
@@ -145,7 +146,7 @@ v0.2 的 ZIP / 加密内容使用 `IFB2` 封装写入同一个载荷；分卷图
 - 分卷图种的拆分 / 重组、任意顺序、缺份报告、跨组混用、重复份、CRC 与 SHA-256 校验，以及 PNG/JPEG/WebP 三种载体的分卷往返
 - 损坏数据与非法输入
 
-当前共 **130 个 JVM 单元测试 + 17 个真机用例**。
+当前共 **134 个 JVM 单元测试 + 17 个真机用例**。
 
 真机端到端测试（需要连接设备）：
 
@@ -176,6 +177,7 @@ app/src/main/java/com/imagefolder/open/
 ├── core/OutputName.kt             # 用户自定义输出文件名的清洗与扩展名处理
 ├── core/ResultTree.kt             # 把扁平的提取结果整理成逐层文件夹视图
 ├── core/MimeTypes.kt              # 系统 MIME 表缺失的文本扩展名与内容嗅探
+├── core/SimpleLruCache.kt         # 有界 LRU 缓存（缩略图用，可单测）
 ├── data/FolderReader.kt           # SAF 目录枚举、结构保留
 ├── data/FolderScanner.kt          # 递归扫描含隐藏内容的图片
 ├── data/FolderExporter.kt         # 按目录结构导出
@@ -184,8 +186,12 @@ app/src/main/java/com/imagefolder/open/
 ├── data/ImageFiles.kt             # 内置浏览器用的纯 File 目录遍历
 ├── data/ShareClassifier.kt        # 分享文件分类到提取/打包
 ├── data/UriUtils.kt               # 内容 URI 读取
-├── MainViewModel.kt               # 状态与业务编排
+├── MainViewModel.kt               # 状态、设置、分享入口与缓存
+├── PackActions.kt                 # MainViewModel 的打包侧动作（同一类的扩展）
+├── ExtractActions.kt              # MainViewModel 的提取 / 扫描 / 保存 / 导出动作
+├── ArchiveActions.kt              # MainViewModel 的解压动作
 └── ui/                            # Compose Material 3 界面
+    └── ResultThumbnail.kt         # 结果行缩略图（异步解码 + LRU 缓存）
 ```
 
 ## 已知限制

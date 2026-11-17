@@ -1,5 +1,33 @@
 # 更新日志
 
+## v1.3.0 — 2026-11-17
+
+### 新增
+
+- **首次启动用户协议**：与原版一致，首次启动弹出一次免责声明，只有一个「接受」按钮；
+  接受后写入设置，之后不再出现
+- **结果列表缩略图**：提取结果里的图片行显示 44 dp 缩略图（最长边 128 px，
+  后台线程解码，48 项有界 LRU 缓存），点缩略图直接打开预览
+- **兼容模式覆盖提取**：开启兼容模式后，提取页的「添加图片」也从相册多选变成单选一张，
+  与原版一致；此前兼容模式只影响打包页
+
+### 变更
+
+- **MainViewModel 拆分**：约 1,600 行的单文件按「打包 / 提取 / 解压」拆成
+  `PackActions.kt` / `ExtractActions.kt` / `ArchiveActions.kt` 三个同包文件
+  （扩展函数），类、状态与行为不变；`extract()` 因与 `extract` 状态属性重名改为
+  `runExtraction()`
+- 迁移到 `androidx.lifecycle.compose.LocalLifecycleOwner`，消除编译弃用警告
+- 新增 `core/SimpleLruCache.kt`（纯 Kotlin，可单测）
+- 版本号 1.3.0（versionCode 15）
+
+### 测试
+
+- 134 个 JVM 单元测试（新增 4 个 `SimpleLruCacheTest`），0 失败
+- 本机构建通过：debug、release（arm64-v8a 与 universal），R8 + 资源收缩，
+  签名证书 SHA-256 与 v1.2.0 一致（可直接覆盖升级）
+- 真机测试待执行（instrumentation 未跑）
+
 ## v1.2.0 — 2026-11-17
 
 ### 新增

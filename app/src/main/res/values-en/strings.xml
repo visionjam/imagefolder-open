@@ -227,4 +227,10 @@
     <string name="open_with">Open with</string>
     <string name="msg_no_app_found">No app can open this file</string>
     <string name="preview_text_truncated">Large file: showing the first 256 KB only.</string>
+    <!-- v1.3.0 -->
+    <string name="agreement_title">User agreement</string>
+    <string name="agreement_body">This app is for technical research only. The author is not responsible for your actions or their consequences.\n\nBy accepting, you confirm that you are ready to take responsibility for your own actions.</string>
+    <string name="agreement_accept">Accept</string>
+    <string name="pick_extract_compat">Add image (compat mode, single)</string>
+    <string name="thumbnail_desc">Thumbnail</string>
 </resources>

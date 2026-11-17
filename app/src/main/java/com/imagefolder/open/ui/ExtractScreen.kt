@@ -1,5 +1,7 @@
 package com.imagefolder.open.ui
 
+import com.imagefolder.open.*
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
@@ -68,7 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -94,6 +96,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ExtractScreen(
     state: ExtractUiState,
+    compatMode: Boolean,
     viewModel: MainViewModel,
 ) {
     val context = LocalContext.current
@@ -144,6 +147,13 @@ fun ExtractScreen(
         ActivityResultContracts.PickMultipleVisualMedia(100),
     ) { uris ->
         viewModel.setExtractSources(uris)
+    }
+    // Compat mode mirrors the original app on the extract side too: one image
+    // from the gallery, for devices whose multi-select picker misbehaves.
+    val compatImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) viewModel.setExtractSources(listOf(uri))
     }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) viewModel.exportToFolder(uri)
@@ -199,15 +209,24 @@ fun ExtractScreen(
         item {
             OutlinedButton(
                 onClick = {
-                    imagePicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    val request = PickVisualMediaRequest(
+                        ActivityResultContracts.PickVisualMedia.ImageOnly,
                     )
+                    if (compatMode) {
+                        compatImagePicker.launch(request)
+                    } else {
+                        imagePicker.launch(request)
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.pick_extract))
+                Text(
+                    stringResource(
+                        if (compatMode) R.string.pick_extract_compat else R.string.pick_extract,
+                    ),
+                )
             }
         }
 
@@ -320,7 +339,7 @@ fun ExtractScreen(
 
         item {
             Button(
-                onClick = { viewModel.extract() },
+                onClick = { viewModel.runExtraction() },
                 enabled = state.sources.isNotEmpty() && !state.extracting,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -664,15 +683,15 @@ private fun ExtractedRow(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (image) {
-                        Icons.Outlined.PhotoLibrary
-                    } else {
-                        Icons.AutoMirrored.Outlined.InsertDriveFile
-                    },
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+                if (image) {
+                    ResultThumbnail(item = item, onClick = onPreview)
+                } else {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

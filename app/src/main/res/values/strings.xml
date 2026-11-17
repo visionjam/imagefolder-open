@@ -232,4 +232,10 @@
     <string name="open_with">用其他应用打开</string>
     <string name="msg_no_app_found">没有找到可以打开这个文件的应用</string>
     <string name="preview_text_truncated">文件较大，只显示前 256 KB。</string>
+    <!-- v1.3.0 -->
+    <string name="agreement_title">用户协议</string>
+    <string name="agreement_body">本应用仅供技术研究使用，使用者做出的行为及后果作者概不负责。\n\n当您选择接受，即表示您已准备好为自己的不当行为承担责任。</string>
+    <string name="agreement_accept">接受</string>
+    <string name="pick_extract_compat">添加图片（兼容模式，单选）</string>
+    <string name="thumbnail_desc">缩略图</string>
 </resources>

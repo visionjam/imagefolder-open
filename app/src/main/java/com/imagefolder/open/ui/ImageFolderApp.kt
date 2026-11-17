@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.R
+import com.imagefolder.open.*
 
 private data class NavItem(val labelRes: Int, val icon: ImageVector)
 
@@ -48,6 +49,7 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
     val shareWarningSeen by viewModel.shareWarningSeen.collectAsState()
     val cacheBytes by viewModel.cacheBytes.collectAsState()
     val secureWindow by viewModel.secureWindow.collectAsState()
+    val agreementAccepted by viewModel.agreementAccepted.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(activeTab) {
@@ -58,6 +60,10 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
+    }
+
+    if (!agreementAccepted) {
+        AgreementDialog(onAccept = viewModel::acceptAgreement)
     }
 
     pendingShare?.let { pending ->
@@ -111,7 +117,11 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (activeTab) {
                 0 -> PackScreen(state = packState, compatMode = compatMode, viewModel = viewModel)
-                1 -> ExtractScreen(state = extractState, viewModel = viewModel)
+                1 -> ExtractScreen(
+                    state = extractState,
+                    compatMode = compatMode,
+                    viewModel = viewModel,
+                )
                 else -> AboutScreen(
                     compatMode = compatMode,
                     onCompatModeChange = viewModel::setCompatMode,
@@ -127,6 +137,24 @@ fun ImageFolderApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
+}
+
+/**
+ * Non-dismissible first-launch disclaimer: the original app only had a single
+ * "accept" button, and so does this one. Back / outside taps do nothing.
+ */
+@Composable
+private fun AgreementDialog(onAccept: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.agreement_title)) },
+        text = { Text(stringResource(R.string.agreement_body)) },
+        confirmButton = {
+            TextButton(onClick = onAccept) {
+                Text(stringResource(R.string.agreement_accept))
+            }
+        },
+    )
 }
 
 @Composable
