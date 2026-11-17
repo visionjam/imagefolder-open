@@ -6,7 +6,7 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
 
 > An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it contains no code or resources from the original app.
 >
-> Current version: **v1.0.0** · [Changelog](CHANGELOG.md)
+> Current version: **v1.1.0** (local build, pending device test) · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/screenshots/screen-pack.png" width="24%" />
@@ -30,9 +30,10 @@ An Android tool that hides any file inside PNG, JPEG or WebP images. The UI is b
   - The cover is capped at 1280 px in split mode so each part does not repeat a huge photo
   - Select the whole group when extracting; order does not matter. Missing, duplicate or corrupt parts are reported
 - **Extract**: select multiple PNG / JPEG / WebP images and automatically detect hidden content
-  - Preview images directly
+  - Browse results one folder at a time: folder rows open, and the back arrow returns to the parent folder
+  - Preview images and plain-text files in-app
   - Save one item or all items to the gallery
-  - Open non-image files after saving
+  - Open any file with another app, including unsaved entries (they are cached first); the ROM's default app is used when one is associated, otherwise Android shows its own "Open with" picker
   - Export to a folder while preserving the directory structure
 - **Folder scan**: recursively scan a folder and list PNG / JPEG / WebP images that contain hidden content; tick the images you want and add just those (or all of them) to extraction
 - **All files access (optional)**: after granting it in system settings, browse the internal storage root, Download and other ordinary folders the system picker cannot open
@@ -146,7 +147,7 @@ Unit tests cover:
 - Split carriers: split / reassemble, arbitrary order, missing-part reporting, mixed groups, duplicates, CRC and SHA-256 validation, and round-trips through PNG / JPEG / WebP
 - Corrupt data and invalid input
 
-Currently **115 JVM unit tests + 16 on-device tests**.
+Currently **123 JVM unit tests + 16 on-device tests**.
 
 On-device end-to-end tests (requires a connected device):
 
@@ -175,6 +176,7 @@ app/src/main/java/com/imagefolder/open/
 ├── core/ImageProcessor.kt         # cover decoding (downsampled), note drawing, encoding
 ├── core/NoteText.kt               # note font-size rules (short-edge based, clamped)
 ├── core/OutputName.kt             # user-supplied output file name sanitising
+├── core/ResultTree.kt             # folder-level view over the flat result list
 ├── data/FolderReader.kt           # SAF directory traversal, structure preservation
 ├── data/FolderScanner.kt          # recursive scan for images with hidden content
 ├── data/FolderExporter.kt         # export with directory structure
@@ -198,7 +200,7 @@ app/src/main/java/com/imagefolder/open/
 - Encrypted RAR (passwords/encrypted headers), solid RAR4, ISO / CAB / DEB / RPM and ZSTD are not supported
 - Split archives must all be present in the current extraction results (same batch of images / envelopes); missing parts are not searched on the device
 - Split carriers repeat the cover in every part, so they help when the payload is much larger than the cover; if the cover alone is near the platform limit, splitting does not make individual images smaller
-- Image payloads are saved to `Pictures/图片文件夹`; other files go to `Download/图片文件夹`. Use "Export to folder" for the full directory structure
+- Saved files follow the app language: `Pictures/图片文件夹` and `Download/图片文件夹` on Chinese; English and every untranslated locale fall back to `Pictures/ImageFolder` and `Download/ImageFolder`. Use "Export to folder" for the full directory structure
 - Switching between Release and debug builds requires an uninstall because the signatures differ
 
 ## Disclaimer

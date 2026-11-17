@@ -144,8 +144,8 @@
 
     <string name="about_version_with_code">Version %1$s (%2$d)</string>
     <string name="about_tagline">An open-source tool for hiding files inside images</string>
-    <string name="about_description">Supports PNG, JPEG and WebP carriers, ZIP compression, AES-256-GCM encryption and directory structures. PNG output without advanced features remains fully compatible with the original Image Folder tpWj format.</string>
-    <string name="about_archives">ZIP, 7z, TAR, GZ, BZ2, XZ and RAR files in extraction results can be unpacked in-app (ZIP/7z passwords and split archives are supported; RAR supports unencrypted RAR5 including solid/multi-volume and non-solid RAR4, but not RAR passwords or solid RAR4).</string>
+    <string name="about_description">PNG / JPEG / WebP carriers, ZIP compression, AES-256-GCM encryption and split output.</string>
+    <string name="about_archives">Unpack ZIP, 7z, TAR, GZ, BZ2, XZ and RAR in-app.\nZIP / 7z support passwords and split archives.\nRAR supports unencrypted RAR5 (solid and multi-volume) and non-solid RAR4; RAR passwords and solid RAR4 are not supported.</string>
     <string name="theme_title">Theme</string>
     <string name="theme_system">Follow system</string>
     <string name="theme_light">Light</string>
@@ -156,15 +156,14 @@
     <string name="language_english">English</string>
     <string name="about_section_settings">Settings</string>
     <string name="about_section_privacy">Privacy &amp; trust</string>
-    <string name="about_privacy_local">All packing and decryption happen on this device; no files are uploaded.</string>
-    <string name="about_privacy_network">The app has no network permission and collects no analytics or crash data. Check for updates only opens GitHub in your browser.</string>
-    <string name="about_privacy_storage">All files access is optional and only used to browse ordinary folders the system picker cannot open. The app still uploads nothing.</string>
-    <string name="about_privacy_open">The code is open source under GPL-3.0 and the data format is documented. Encryption protects the content, but does not hide the fact that an image contains hidden data.</string>
+    <string name="about_privacy_local">Packing and decryption run on this device; no files are uploaded.</string>
+    <string name="about_privacy_network">No network permission, no analytics and no crash reports.\nCheck for updates only opens GitHub in your browser.</string>
+    <string name="about_privacy_storage">All files access is optional and only browses folders the system picker cannot open.</string>
     <string name="about_section_tools">Tools</string>
     <string name="about_section_tech">Technical details</string>
     <string name="about_section_about">About</string>
     <string name="about_compat_title">Compatibility mode</string>
-    <string name="about_compat_summary">When enabled, adding files is limited to picking a single image from the gallery (for older systems or picker issues).</string>
+    <string name="about_compat_summary">When enabled, adding files is limited to one image from the gallery, for older systems or picker issues.</string>
     <string name="about_check_update_title">Check for updates</string>
     <string name="about_check_update_summary">Open the latest release on GitHub</string>
     <string name="about_copy_version_title">Copy version info</string>
@@ -176,18 +175,17 @@
     <string name="about_licenses_body">This app: GNU GPL v3.0\n\nAndroidX, Jetpack Compose, Kotlin: Apache License 2.0\n\nApache Commons Compress / IO / Lang / Codec, zip4j, kotlinx.coroutines, kotlinx.serialization: Apache License 2.0\n\nXZ for Java: Public Domain\n\nlibarchive: BSD 2-Clause\n\nzhanghai libarchive-android: Apache License 2.0\n\nFull license texts are available in the repository LICENSE and THIRD_PARTY_NOTICES.md files and the respective dependency repositories.</string>
     <string name="about_licenses_close">Close</string>
     <string name="about_disclaimer_title">Disclaimer</string>
-    <string name="about_disclaimer">This app is for technical research and personal backup only. Do not use it to distribute illegal content or infringe others\' rights. You are responsible for your actions.</string>
+    <string name="about_disclaimer">For technical research and personal backup only. Do not use it for illegal or infringing content.\nYou are responsible for your actions and their consequences.</string>
     <string name="about_open_source_title">About this project</string>
-    <string name="about_open_source">An independent open-source reimplementation of the discontinued Image Folder app. All code and assets were rewritten; it is not affiliated with the original author. UI built with Material Design 3 and licensed under GPL-3.0.</string>
+    <string name="about_open_source">An independent open-source reimplementation of the discontinued Image Folder app.\nAll code and assets were rewritten; not affiliated with the original author.\nMaterial Design 3 UI, licensed under GPL-3.0.</string>
     <string name="about_license">License: GNU GPL v3.0</string>
     <string name="about_project_url">https://github.com/visionjam/imagefolder-open</string>
     <string name="about_project_open">Open on GitHub</string>
     <string name="about_archives_title">Archive support</string>
     <string name="about_format_title">Data format</string>
-    <string name="about_format">PNG stores a private tpWj chunk (JSON header + 0x00 + data, CRC32 per the PNG spec); JPEG uses APP15 segments; WebP uses a private RIFF chunk named IFBW. Compressed or encrypted payloads use the IFB2 envelope.</string>
+    <string name="about_format">PNG: private tpWj chunk (JSON header + 0x00 + data).\nJPEG: APP15 segments.\nWebP: private RIFF chunk named IFBW.\nCompressed or encrypted payloads use the IFB2 envelope.</string>
     <string name="about_carrier_title">Carrier formats</string>
-    <string name="about_carrier">Output follows the cover image: PNG, JPEG and WebP are preserved; HEIC/AVIF and other containers are converted to PNG. JPEG/WebP carriers require this app; the original v1.1 only reads PNG.</string>
-    <string name="about_tank_note">Output names follow the original style: Tank_timestamp.png / .jpg / .webp</string>
+    <string name="about_carrier">Output follows the cover: PNG / JPEG / WebP are preserved.\nHEIC, AVIF and other containers are converted to PNG.\nJPEG / WebP carriers need this app to extract.</string>
     <string name="about_expand">Expand</string>
     <string name="about_collapse">Collapse</string>
     <!-- v0.10.0 -->
@@ -205,7 +203,7 @@
     <string name="about_cache_summary">Temporary files use %1$s; tap to clear</string>
     <string name="msg_cache_cleared">Cache cleared: %1$s</string>
     <string name="about_secure_title">Block screenshots / recents preview</string>
-    <string name="about_secure_summary">Hides app content from screenshots, screen recording and the recents thumbnail. Off by default.</string>
+    <string name="about_secure_summary">Hides app content from screenshots, screen recording and the recents thumbnail.</string>
     <!-- v1.0.0 -->
     <string name="split_title">Split output (1–9 images)</string>
     <string name="split_summary">Split one carrier into several images for platforms with per-image size limits.</string>
@@ -220,5 +218,13 @@
     <string name="msg_split_incomplete">This is a split carrier: part(s) %1$s of %2$d are missing. Select every image of the group and try again.</string>
     <string name="msg_split_incomplete_multi">%1$d split groups are incomplete. Select every image of each group.</string>
     <string name="about_split_title">Split carriers</string>
-    <string name="about_split">When packing you can split the bundle across 1–9 images. Every image is a normal picture carrying one slice and a random group id. Select the whole group when extracting and the app verifies and joins the parts. Split parts use an IFSP header that only this app understands.</string>
+    <string name="about_split">Split one carrier into 1–9 images that still look like normal pictures.\nSelect the whole group when extracting; the app verifies and joins the parts.\nSplit parts use an IFSP header only this app understands.</string>
+    <!-- v1.1.0 -->
+    <string name="save_folder_name">ImageFolder</string>
+    <string name="result_up">Up</string>
+    <string name="folder_items">%1$d items</string>
+    <string name="result_folder_empty">This folder is empty</string>
+    <string name="open_with">Open with</string>
+    <string name="msg_no_app_found">No app can open this file</string>
+    <string name="preview_text_truncated">Large file: showing the first 256 KB only.</string>
 </resources>

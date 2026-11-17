@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only the save folder is translated here; the rest of the Chinese UI lives
+      in values/ (the default), so it still applies to zh devices.
+    -->
+    <string name="save_folder_name">图片文件夹</string>
+</resources>

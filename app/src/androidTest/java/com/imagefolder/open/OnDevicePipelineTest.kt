@@ -36,7 +36,7 @@ class OnDevicePipelineTest {
     @Test
     fun fullPipelineWorksOnDevice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val saver = GallerySaver(context)
+        val saver = GallerySaver(context, "ImageFolderTest")
         val stamp = System.currentTimeMillis()
 
         val cover = Bitmap.createBitmap(480, 320, Bitmap.Config.ARGB_8888).also { bitmap ->
@@ -187,7 +187,7 @@ class OnDevicePipelineTest {
     @Test
     fun encryptedBundlePipelineWorksOnDevice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val saver = GallerySaver(context)
+        val saver = GallerySaver(context, "ImageFolderTest")
         val stamp = System.currentTimeMillis()
 
         val cover = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)

@@ -1,15 +1,14 @@
 package com.imagefolder.open.ui
 
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -26,10 +25,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -57,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,8 +82,12 @@ import com.imagefolder.open.ExtractUiState
 import com.imagefolder.open.MainViewModel
 import com.imagefolder.open.R
 import com.imagefolder.open.core.ImageProcessor
+import com.imagefolder.open.core.ResultEntry
+import com.imagefolder.open.core.ResultNode
+import com.imagefolder.open.core.ResultTree
 import com.imagefolder.open.data.ScanHit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -87,7 +96,19 @@ fun ExtractScreen(
     viewModel: MainViewModel,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var previewItem by remember { mutableStateOf<ExtractItem?>(null) }
+
+    // Results are stored flat ("payload/sub/a.txt"); derive one folder level at
+    // a time so folder rows can be opened instead of being dead labels.
+    val treeEntries = remember(state.results) {
+        state.results.mapIndexed { index, item ->
+            ResultEntry(item.relativePath, item.isDirectory, index)
+        }
+    }
+    val visibleNodes = remember(treeEntries, state.resultFolder) {
+        ResultTree.children(treeEntries, state.resultFolder)
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(100),
@@ -332,15 +353,43 @@ fun ExtractScreen(
                     }
                 }
             }
-            itemsIndexed(state.results) { index, item ->
-                ExtractedRow(
-                    item = item,
-                    unpacking = state.unpackingIndex == index,
-                    onPreview = { previewItem = item },
-                    onSave = { viewModel.saveExtracted(index) },
-                    onOpen = { openFile(context, item) },
-                    onUnpack = { viewModel.unpackArchive(index) },
-                )
+            if (state.resultFolder.isNotEmpty()) {
+                item {
+                    ResultBreadcrumb(
+                        folder = state.resultFolder,
+                        onUp = viewModel::navigateResultUp,
+                    )
+                }
+            }
+            if (visibleNodes.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.result_folder_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            items(visibleNodes, key = { it.path }) { node ->
+                if (node.isDirectory) {
+                    ResultFolderRow(
+                        node = node,
+                        onOpen = { viewModel.enterResultFolder(node.path) },
+                    )
+                } else {
+                    val index = node.itemIndex
+                    if (index in state.results.indices) {
+                        val item = state.results[index]
+                        ExtractedRow(
+                            item = item,
+                            unpacking = state.unpackingIndex == index,
+                            onPreview = { previewItem = item },
+                            onSave = { viewModel.saveExtracted(index) },
+                            onOpenWith = { scope.launch { openWithAnotherApp(context, item) } },
+                            onUnpack = { viewModel.unpackArchive(index) },
+                        )
+                    }
+                }
             }
         }
 
@@ -348,7 +397,11 @@ fun ExtractScreen(
     }
 
     previewItem?.let { item ->
-        PreviewDialog(item = item, onDismiss = { previewItem = null })
+        PreviewDialog(
+            item = item,
+            onDismiss = { previewItem = null },
+            onOpenWith = { scope.launch { openWithAnotherApp(context, item) } },
+        )
     }
 
     if (showBrowser) {
@@ -483,6 +536,82 @@ private fun ScanHitRow(
     }
 }
 
+@Composable
+private fun ResultBreadcrumb(folder: String, onUp: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 4.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onUp) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.result_up),
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.FolderOpen,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = folder.trim('/'),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResultFolderRow(node: ResultNode, onOpen: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = node.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.folder_items, node.childCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExtractedRow(
@@ -490,10 +619,11 @@ private fun ExtractedRow(
     unpacking: Boolean,
     onPreview: () -> Unit,
     onSave: () -> Unit,
-    onOpen: () -> Unit,
+    onOpenWith: () -> Unit,
     onUnpack: () -> Unit,
 ) {
-    val image = !item.isDirectory && isImageMime(item.mime, item.name)
+    val image = isImageMime(item.mime, item.name)
+    val previewable = image || isTextFile(item.mime, item.name)
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(16.dp),
@@ -502,10 +632,10 @@ private fun ExtractedRow(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = when {
-                        item.isDirectory -> Icons.Outlined.Folder
-                        image -> Icons.Outlined.PhotoLibrary
-                        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
+                    imageVector = if (image) {
+                        Icons.Outlined.PhotoLibrary
+                    } else {
+                        Icons.AutoMirrored.Outlined.InsertDriveFile
                     },
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
@@ -519,9 +649,7 @@ private fun ExtractedRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = if (item.isDirectory) {
-                            stringResource(R.string.directory_badge)
-                        } else if (item.relativePath != item.name) {
+                        text = if (item.relativePath != item.name) {
                             item.relativePath
                         } else {
                             stringResource(R.string.source_from, item.sourceName)
@@ -532,63 +660,54 @@ private fun ExtractedRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (!item.isDirectory) {
-                    val sizeLabel = buildString {
-                        append(formatSize(item.bytes.size.toLong()))
-                        item.archiveFormat?.let { append(" · ").append(it.label) }
-                    }
-                    Text(
-                        text = sizeLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                val sizeLabel = buildString {
+                    append(formatSize(item.bytes.size.toLong()))
+                    item.archiveFormat?.let { append(" · ").append(it.label) }
                 }
+                Text(
+                    text = sizeLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalArrangement = Arrangement.Center,
             ) {
-                if (item.isDirectory) {
+                if (previewable) {
+                    TextButton(onClick = onPreview) {
+                        Text(stringResource(R.string.preview))
+                    }
+                }
+                if (item.savedUri == null) {
+                    TextButton(onClick = onSave) {
+                        Text(stringResource(R.string.save))
+                    }
+                } else {
                     Text(
-                        text = stringResource(R.string.directory_badge),
+                        text = stringResource(R.string.saved_badge),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
-                } else {
-                    if (image) {
-                        TextButton(onClick = onPreview) {
-                            Text(stringResource(R.string.preview))
-                        }
-                    }
-                    if (item.savedUri == null) {
-                        TextButton(onClick = onSave) {
-                            Text(stringResource(R.string.save))
-                        }
-                    } else {
-                        Text(
-                            text = stringResource(R.string.saved_badge),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                }
+                // Every format gets this: the in-app preview only understands
+                // images and text, so unknown files are handed to another app.
+                TextButton(onClick = onOpenWith) {
+                    Text(stringResource(R.string.open_with))
+                }
+                if (item.archiveFormat != null) {
+                    if (unpacking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp)
+                                .size(16.dp),
+                            strokeWidth = 2.dp,
                         )
-                        TextButton(onClick = onOpen) {
-                            Text(stringResource(R.string.open))
-                        }
-                    }
-                    if (item.archiveFormat != null) {
-                        if (unpacking) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp)
-                                    .size(16.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            TextButton(onClick = onUnpack) {
-                                Text(stringResource(R.string.unpack))
-                            }
+                    } else {
+                        TextButton(onClick = onUnpack) {
+                            Text(stringResource(R.string.unpack))
                         }
                     }
                 }
@@ -598,7 +717,13 @@ private fun ExtractedRow(
 }
 
 @Composable
-private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
+private fun PreviewDialog(
+    item: ExtractItem,
+    onDismiss: () -> Unit,
+    onOpenWith: () -> Unit,
+) {
+    val image = isImageMime(item.mime, item.name)
+    val text = isTextFile(item.mime, item.name)
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
@@ -608,12 +733,6 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
-                val bitmap by produceState<Bitmap?>(null, item.bytes) {
-                    value = withContext(Dispatchers.IO) {
-                        ImageProcessor.decodePreviewBytes(item.bytes, PREVIEW_MAX_SIZE)
-                    }
-                }
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -621,25 +740,80 @@ private fun PreviewDialog(item: ExtractItem, onDismiss: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(12.dp))
-                val preview = bitmap
-                if (preview != null) {
-                    Image(
-                        bitmap = preview.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 420.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                } else {
-                    Text(stringResource(R.string.msg_preview_failed))
+                when {
+                    image -> ImagePreview(item.bytes)
+                    text -> TextPreview(item.bytes)
+                    else -> Text(stringResource(R.string.msg_preview_failed))
                 }
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.done))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onOpenWith) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.open_with))
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.done))
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ImagePreview(bytes: ByteArray) {
+    @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
+    val bitmap by produceState<Bitmap?>(null, bytes) {
+        value = withContext(Dispatchers.IO) {
+            ImageProcessor.decodePreviewBytes(bytes, PREVIEW_MAX_SIZE)
+        }
+    }
+    val preview = bitmap
+    if (preview != null) {
+        Image(
+            bitmap = preview.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp),
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        Text(stringResource(R.string.msg_preview_failed))
+    }
+}
+
+@Composable
+private fun TextPreview(bytes: ByteArray) {
+    @Suppress("ProduceStateDoesNotAssignValue") // value is assigned below
+    val decoded by produceState<String?>(null, bytes) {
+        value = withContext(Dispatchers.IO) { decodePreviewText(bytes) }
+    }
+    val body = decoded
+    if (body == null) {
+        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        return
+    }
+    Text(
+        text = body,
+        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 420.dp)
+            .verticalScroll(rememberScrollState()),
+    )
+    if (bytes.size > PREVIEW_TEXT_MAX_BYTES) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.preview_text_truncated),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -712,16 +886,14 @@ private fun PasswordPromptDialog(
 /** Preview decode target for extracted images shown in a dialog. */
 private const val PREVIEW_MAX_SIZE = 1080
 
-private fun openFile(context: Context, item: ExtractItem) {
-    val uri = item.savedUri ?: return
-    val mime = item.mime ?: "application/octet-stream"
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mime)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+/** Larger text files are cut off; the dialog is a preview, not an editor. */
+private const val PREVIEW_TEXT_MAX_BYTES = 256 * 1024
+
+private fun decodePreviewText(bytes: ByteArray): String {
+    val slice = if (bytes.size > PREVIEW_TEXT_MAX_BYTES) {
+        bytes.copyOf(PREVIEW_TEXT_MAX_BYTES)
+    } else {
+        bytes
     }
-    try {
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        Toast.makeText(context, R.string.msg_open_failed, Toast.LENGTH_SHORT).show()
-    }
+    return slice.toString(Charsets.UTF_8)
 }

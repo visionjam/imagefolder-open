@@ -273,11 +273,6 @@ fun AboutScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable { uriHandler.openUri(PROJECT_URL) },
             )
-            Text(
-                text = stringResource(R.string.about_tank_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         Spacer(Modifier.height(4.dp))
@@ -389,10 +384,6 @@ private fun PrivacyCard() {
             )
             Text(
                 text = stringResource(R.string.about_privacy_storage),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = stringResource(R.string.about_privacy_open),
                 style = MaterialTheme.typography.bodySmall,
             )
         }

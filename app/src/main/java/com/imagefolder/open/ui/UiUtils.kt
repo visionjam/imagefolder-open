@@ -21,3 +21,15 @@ fun isImageMime(mime: String?, fileName: String): Boolean {
     val extension = fileName.substringAfterLast('.', "").lowercase()
     return extension in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif", "avif")
 }
+
+/** Formats the in-app text preview can show as UTF-8. */
+private val TEXT_EXTENSIONS = setOf(
+    "txt", "md", "markdown", "json", "xml", "csv", "tsv", "log", "ini", "yml", "yaml",
+    "kt", "kts", "java", "py", "js", "ts", "html", "htm", "css", "sh", "bat", "conf",
+    "properties", "gradle", "toml", "srt", "vtt",
+)
+
+fun isTextFile(mime: String?, fileName: String): Boolean {
+    if (mime?.startsWith("text/") == true) return true
+    return fileName.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
+}

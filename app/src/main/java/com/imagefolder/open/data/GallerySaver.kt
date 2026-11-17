@@ -15,16 +15,24 @@ data class SavedFile(
 /**
  * Saves extracted files through MediaStore so they appear in the gallery /
  * Downloads app without any storage permission on Android 10+.
+ *
+ * [folderName] is the visible folder below Pictures/ and Download/. It is
+ * resolved from resources by the caller so an English device gets
+ * `Pictures/ImageFolder` instead of a Chinese path that looks like mojibake
+ * in other apps.
  */
-class GallerySaver(private val context: Context) {
+class GallerySaver(
+    private val context: Context,
+    private val folderName: String,
+) {
 
     /** Legacy flat save, kept for simple files. */
     fun save(bytes: ByteArray, fileName: String, mime: String?): SavedFile =
         saveRelative(bytes, fileName, mime)
 
     /**
-     * Saves [bytes] under `Pictures/图片文件夹/<dirs>` for images or
-     * `Download/图片文件夹/<dirs>` for everything else.
+     * Saves [bytes] under `Pictures/<folderName>/<dirs>` for images or
+     * `Download/<folderName>/<dirs>` for everything else.
      */
     fun saveRelative(bytes: ByteArray, relativePath: String, mime: String?): SavedFile {
         val segments = relativePath.split('/')
@@ -44,7 +52,7 @@ class GallerySaver(private val context: Context) {
         } else {
             MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         }
-        val baseDirectory = if (isImage) "Pictures/图片文件夹" else "Download/图片文件夹"
+        val baseDirectory = if (isImage) "Pictures/$folderName" else "Download/$folderName"
         val targetDirectory = if (subDirectory.isEmpty()) {
             baseDirectory
         } else {

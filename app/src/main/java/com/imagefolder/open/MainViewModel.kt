@@ -33,6 +33,7 @@ import com.imagefolder.open.core.ImageProcessor
 import com.imagefolder.open.core.InvalidPasswordException
 import com.imagefolder.open.core.OutputName
 import com.imagefolder.open.core.PngChunkCodec
+import com.imagefolder.open.core.ResultTree
 import com.imagefolder.open.core.SplitCarrierCodec
 import com.imagefolder.open.core.SplitFormatException
 import com.imagefolder.open.core.SplitIntegrityException
@@ -150,6 +151,8 @@ data class ExtractUiState(
     val sources: List<PickedFile> = emptyList(),
     val extracting: Boolean = false,
     val results: List<ExtractItem> = emptyList(),
+    /** Folder currently open in the result browser; "" is the result root. */
+    val resultFolder: String = "",
     val hasExtracted: Boolean = false,
     val needsPassword: Boolean = false,
     val passwordError: Boolean = false,
@@ -176,7 +179,13 @@ data class PendingShare(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val gallerySaver = GallerySaver(application)
+
+    /**
+     * Resolved per save instead of once, so the folder name follows the
+     * in-app language even when it is switched while the app is running.
+     */
+    private fun gallerySaver(): GallerySaver =
+        GallerySaver(getApplication(), localizedContext().getString(R.string.save_folder_name))
 
     private val _pack = MutableStateFlow(PackUiState())
     val pack: StateFlow<PackUiState> = _pack.asStateFlow()
@@ -762,13 +771,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (result.saved) return
         viewModelScope.launch {
             val app = getApplication<Application>()
+            val saver = gallerySaver()
             val saved = mutableMapOf<Int, SavedFile>()
             var failure: Throwable? = null
             withContext(Dispatchers.IO) {
                 result.parts.forEachIndexed { index, part ->
                     if (part.saved) return@forEachIndexed
                     try {
-                        saved[index] = gallerySaver.save(part.bytes, part.fileName, result.mime)
+                        saved[index] = saver.save(part.bytes, part.fileName, result.mime)
                     } catch (t: Throwable) {
                         if (failure == null) failure = t
                     }
@@ -1050,6 +1060,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 sources = sources,
                 results = emptyList(),
+                resultFolder = "",
                 hasExtracted = false,
                 needsPassword = false,
                 passwordError = false,
@@ -1060,6 +1071,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 unpackPasswordError = false,
             )
         }
+    }
+
+    /** Opens [path] (a directory relative path such as "payload/") in the result browser. */
+    fun enterResultFolder(path: String) {
+        val folder = ResultTree.normalizeFolder(path)
+        _extract.update { it.copy(resultFolder = folder) }
+    }
+
+    /** Goes one level up; the root is the top of the result browser. */
+    fun navigateResultUp() {
+        _extract.update { it.copy(resultFolder = ResultTree.parentFolder(it.resultFolder)) }
     }
 
     fun extract(password: String? = null) {
@@ -1093,6 +1115,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             it.copy(
                                 extracting = false,
                                 results = outcome.items,
+                                resultFolder = "",
                                 hasExtracted = true,
                                 needsPassword = false,
                                 passwordError = false,
@@ -1138,8 +1161,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (item.savedUri != null) return
         viewModelScope.launch {
             try {
+                val saver = gallerySaver()
                 val saved = withContext(Dispatchers.IO) {
-                    gallerySaver.saveRelative(item.bytes, item.relativePath, item.mime)
+                    saver.saveRelative(item.bytes, item.relativePath, item.mime)
                 }
                 _extract.update { state ->
                     state.copy(
@@ -1161,12 +1185,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val app = getApplication<Application>()
             val savedUris = mutableMapOf<Int, Uri>()
+            val saver = gallerySaver()
             var location: String? = null
             var failures = 0
             withContext(Dispatchers.IO) {
                 items.forEachIndexed { index, item ->
                     if (item.isDirectory || item.savedUri != null) return@forEachIndexed
-                    runCatching { gallerySaver.saveRelative(item.bytes, item.relativePath, item.mime) }
+                    runCatching { saver.saveRelative(item.bytes, item.relativePath, item.mime) }
                         .onSuccess { saved ->
                             location = location ?: saved.location
                             savedUris[index] = saved.uri
@@ -1274,6 +1299,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _extract.update { current ->
                     current.copy(
                         results = current.results + additions,
+                        // The unpacked tree is added at the result root, so jump
+                        // back there to make the new folder visible.
+                        resultFolder = "",
                         unpackingIndex = null,
                         unpackPasswordIndex = null,
                         unpackPasswordError = false,

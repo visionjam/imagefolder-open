@@ -10,6 +10,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/**
+ * Writes [bytes] into a fresh subdirectory of the FileProvider share cache.
+ *
+ * Unlike [writeShareCache], which uses the final file name, this keeps two
+ * files with the same leaf name (a/x.txt and b/x.txt) from overwriting each
+ * other while an external app still has the first one open.
+ */
+internal fun writeOpenCache(context: Context, bytes: ByteArray, fileName: String): Uri {
+    val root = File(context.cacheDir, "shared").apply { mkdirs() }
+    val directory = File(root, "open-" + System.nanoTime()).apply { mkdirs() }
+    val safeName = fileName.replace('/', '_').replace('\\', '_').ifBlank { "file" }
+    val file = File(directory, safeName)
+    file.writeBytes(bytes)
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
 internal fun writeShareCache(context: Context, bytes: ByteArray, fileName: String): Uri {
     val directory = File(context.cacheDir, "shared").apply { mkdirs() }
     val now = System.currentTimeMillis()
