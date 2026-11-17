@@ -24,7 +24,8 @@
 ### 测试
 
 - 130 个 JVM 单元测试（新增 7 个 `MimeTypesTest`）
-- 17 个 instrumentation 用例（新增 1 个文本 hand-off 用例，尚未实机执行）
+- 17 个 instrumentation 用例在真机全部通过（Redmi 22011211C / Android 12，
+  新增 1 个文本 hand-off 用例）
 
 ## v1.1.0 — 2026-11-17
 
